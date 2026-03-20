@@ -10,18 +10,19 @@ Task tool (general-purpose):
   prompt: |
     You are implementing {TASK_ID}: [task name]
 
-    ## Task Description
+    ## Task Metadata (from plan.json)
 
-    [Single task block extracted from `#### {TASK_ID}: [name]` through the next
-    `####` header. This includes any inline handoff notes (blockquotes like
-    `> **Handoff from A2:** ...`) targeting this task from prior phases.
-    Paste the full block here — don't make the subagent read the plan file.]
+    {TASK_METADATA}
 
-    ## Task Context
+    This JSON contains: id, name, files (create/modify/test), verification,
+    done_when, depends_on, success_criteria.
 
-    [Scene-setting derived from the task block itself: where this fits,
-    what it implements. Do not include phase-level information, other task
-    details, or completion notes — those violate context isolation.]
+    ## Task Instructions (from task file)
+
+    {TASK_PROSE}
+
+    This contains: Avoid+WHY section, Steps, and any handoff notes from
+    prior phases.
 
     ## Before You Begin
 
