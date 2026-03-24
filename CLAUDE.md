@@ -53,6 +53,8 @@ Bash test scripts live in `tests/`. Run with `bash tests/<dir>/<script>.sh`. Ski
 
 This repo uses its own skills. The typical flow: design -> worktree -> draft-plan -> orchestrate -> create-pr -> review-pr -> merge-pr.
 
+Orchestrate spawns agent team teammates per task (parallel within phase) with push-based idle notifications instead of polling. The design skill checks and enables the required `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` flag.
+
 ## Markdown
 
 - Always add a language label to fenced code blocks (MD040) — CodeRabbit flags this on every PR
