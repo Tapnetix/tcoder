@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${BASH_VERSINFO[0]}" -lt 4 || ( "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -lt 4 ) ]]; then
+  echo "ERROR: validate-plan requires bash 4.4+ (found $BASH_VERSION). On macOS, install bash via Homebrew." >&2
+  exit 1
+fi
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -66,12 +71,28 @@ do_schema() {
   local json
   json=$(cat "$plan_json")
 
-  local schema status goal architecture tech_stack
-  schema=$(echo "$json" | jq -r '.schema // empty')
-  status=$(echo "$json" | jq -r '.status // empty')
-  goal=$(echo "$json" | jq -r '.goal // empty')
-  architecture=$(echo "$json" | jq -r '.architecture // empty')
-  tech_stack=$(echo "$json" | jq -r '.tech_stack // empty')
+  # --- Level 1: Bulk extract top-level scalars (1 jq call replaces ~10) ---
+  local _top=()
+  mapfile -d '' _top < <(echo "$json" | jq -j '[
+    (.schema // "" | tostring),
+    (.status // ""),
+    (.goal // ""),
+    (.architecture // ""),
+    (.tech_stack // ""),
+    (.workflow // ""),
+    (.execution_mode // ""),
+    (has("integration_branch") | tostring),
+    (.integration_branch | type),
+    (if has("integration_branch") then (.integration_branch // "") | tostring else "" end),
+    ((.success_criteria // []) | length | tostring),
+    ((.phases // []) | length | tostring)
+  ] | map(. + "\u0000") | join("")')
+
+  local schema="${_top[0]}" status="${_top[1]}" goal="${_top[2]}"
+  local architecture="${_top[3]}" tech_stack="${_top[4]}"
+  local workflow="${_top[5]}" execution_mode="${_top[6]}"
+  local ib_exists="${_top[7]}" ib_type="${_top[8]}" integration_branch="${_top[9]}"
+  local plan_criteria_count="${_top[10]}" phase_count="${_top[11]}"
 
   [[ -z "$schema" ]] && err "ERROR: missing_field: schema"
   [[ -z "$status" ]] && err "ERROR: missing_field: status"
@@ -79,8 +100,6 @@ do_schema() {
   [[ -z "$architecture" ]] && err "ERROR: missing_field: architecture"
   [[ -z "$tech_stack" ]] && err "ERROR: missing_field: tech_stack"
 
-  local workflow
-  workflow=$(echo "$json" | jq -r '.workflow // empty')
   if [[ -z "$workflow" ]]; then
     err "ERROR: missing_field: workflow"
   else
@@ -90,8 +109,6 @@ do_schema() {
     esac
   fi
 
-  local execution_mode
-  execution_mode=$(echo "$json" | jq -r '.execution_mode // empty')
   if [[ -z "$execution_mode" ]]; then
     err "ERROR: missing_field: execution_mode"
   else
@@ -101,16 +118,10 @@ do_schema() {
     esac
   fi
 
-  local ib_exists
-  ib_exists=$(echo "$json" | jq 'has("integration_branch")')
   if [[ "$ib_exists" == "true" ]]; then
-    local integration_branch
-    local ib_type
-    ib_type=$(echo "$json" | jq -r '.integration_branch | type')
     if [[ "$ib_type" != "string" ]]; then
       err "ERROR: invalid_integration_branch: integration_branch must be a string, got $ib_type"
     else
-      integration_branch=$(echo "$json" | jq -r '.integration_branch')
       if [[ -z "$integration_branch" || "$integration_branch" =~ ^[[:space:]]*$ ]]; then
         err "ERROR: invalid_integration_branch: integration_branch must be a non-empty string"
       fi
@@ -124,21 +135,77 @@ do_schema() {
     esac
   fi
 
-  local plan_criteria_count
-  plan_criteria_count=$(echo "$json" | jq '(.success_criteria // []) | length')
-  for ((i=0; i<plan_criteria_count; i++)); do
-    local run expect_exit expect_output
-    run=$(echo "$json" | jq -r ".success_criteria[$i].run // empty")
-    expect_exit=$(echo "$json" | jq -r ".success_criteria[$i].expect_exit // empty")
-    expect_output=$(echo "$json" | jq -r ".success_criteria[$i].expect_output // empty")
+  # --- Level 2: Bulk extract plan-level success_criteria (1 jq call) ---
+  if [[ "$plan_criteria_count" -gt 0 ]]; then
+    local _pc=()
+    mapfile -d '' _pc < <(echo "$json" | jq -j '[
+      .success_criteria[] | [(.run // ""), (.expect_exit // "" | tostring), (.expect_output // "")]
+    ] | map(map(. + "\u0000") | join("")) | join("")')
 
-    [[ -z "$run" ]] && err "ERROR: empty_run: plan success_criteria[$i]"
-    [[ -z "$expect_exit" && -z "$expect_output" ]] && err "ERROR: missing_expect: plan success_criteria[$i] has neither expect_exit nor expect_output"
-  done
+    for ((i=0; i<plan_criteria_count; i++)); do
+      local idx=$((i * 3))
+      local run="${_pc[$idx]}" expect_exit="${_pc[$((idx+1))]}" expect_output="${_pc[$((idx+2))]}"
+      [[ -z "$run" ]] && err "ERROR: empty_run: plan success_criteria[$i]"
+      [[ -z "$expect_exit" && -z "$expect_output" ]] && err "ERROR: missing_expect: plan success_criteria[$i] has neither expect_exit nor expect_output"
+    done
+  fi
 
-  local phase_count
-  phase_count=$(echo "$json" | jq '(.phases // []) | length')
   [[ "$phase_count" -eq 0 ]] && err "ERROR: empty_phases: plan must have at least one phase"
+
+  # --- Level 3: Bulk extract phase scalars via NUL-delimited (1 jq call) ---
+  # Stride: 6 fields per phase (letter, name, status, rationale, has_depends_on, task_count)
+  local _ps=()
+  mapfile -d '' _ps < <(echo "$json" | jq -j '
+    [.phases // [] | to_entries[] | [
+      (.value.letter // ""),
+      (.value.name // ""),
+      (.value.status // ""),
+      (.value.rationale // ""),
+      (.value | has("depends_on") | tostring),
+      ((.value.tasks // []) | length | tostring)
+    ] | map(. + "\u0000") | join("")] | join("")')
+
+  # --- Level 3b: Phase depends_on + criteria as JSON arrays (2 jq calls) ---
+  local _phase_deps _phase_criteria_json
+  _phase_deps=$(echo "$json" | jq -c '[(.phases // [])[] | (.depends_on // [])]')
+  _phase_criteria_json=$(echo "$json" | jq -c '[(.phases // [])[] | (.success_criteria // [])]')
+
+  # --- Level 4: Bulk extract task scalars via NUL-delimited (1 jq call) ---
+  # Stride: 11 fields per task (pi, ti, id, name, status, verification, done_when, has_files, has_create, has_modify, has_test)
+  local _ts=()
+  mapfile -d '' _ts < <(echo "$json" | jq -j '
+    [.phases // [] | to_entries[] | .key as $pi |
+     (.value.tasks // []) | to_entries[] | [
+      ($pi | tostring), (.key | tostring),
+      (.value.id // ""), (.value.name // ""),
+      (.value.status // ""), (.value.verification // ""),
+      (.value.done_when // ""),
+      (.value | has("files") | tostring),
+      ((.value.files // {}) | has("create") | tostring),
+      ((.value.files // {}) | has("modify") | tostring),
+      ((.value.files // {}) | has("test") | tostring)
+    ] | map(. + "\u0000") | join("")] | join("")')
+  local _total_tasks=$(( ${#_ts[@]} / 11 ))
+
+  # --- Level 4b: Task arrays as per-task JSON lines (1 jq call, no per-task jq) ---
+  local _task_arrays=()
+  mapfile -t _task_arrays < <(echo "$json" | jq -c '
+    .phases // [] | to_entries[] |
+    (.value.tasks // []) | .[] | {
+      depends_on: (.depends_on // []),
+      create: (.files.create // []),
+      modify: (.files.modify // []),
+      test_files: (.files.test // []),
+      criteria: (.success_criteria // [])
+    }')
+
+  # --- Level 5: Bulk extract BFS dependency graph (1 jq call) ---
+  local _dep_graph=()
+  mapfile -d '' _dep_graph < <(echo "$json" | jq -j '
+    [(.phases // [])[] | [.letter, (.depends_on // [] | join(","))]
+    | map(. + "\u0000") | join("")] | join("")')
+
+  # --- Now validate using pre-extracted data (no more jq calls in loops) ---
 
   local all_task_ids=()
   local all_create_paths=()
@@ -146,11 +213,10 @@ do_schema() {
   local prev_phase_letter=""
 
   for ((p=0; p<phase_count; p++)); do
-    local letter name phase_status rationale
-    letter=$(echo "$json" | jq -r ".phases[$p].letter // empty")
-    name=$(echo "$json" | jq -r ".phases[$p].name // empty")
-    phase_status=$(echo "$json" | jq -r ".phases[$p].status // empty")
-    rationale=$(echo "$json" | jq -r ".phases[$p].rationale // empty")
+    local base=$((p * 6))
+    local letter="${_ps[$base]}" name="${_ps[$((base+1))]}"
+    local phase_status="${_ps[$((base+2))]}" rationale="${_ps[$((base+3))]}"
+    local phase_has_deps="${_ps[$((base+4))]}" task_count="${_ps[$((base+5))]}"
 
     [[ -z "$letter" ]] && err "ERROR: missing_field: phases[$p].letter"
     [[ -z "$name" ]] && err "ERROR: missing_field: phases[$p].name"
@@ -165,20 +231,17 @@ do_schema() {
         err "ERROR: duplicate_phase_letter: phase letter '$letter' appears more than once"
       fi
 
-      local phase_has_deps
-      phase_has_deps=$(echo "$json" | jq ".phases[$p] | has(\"depends_on\")")
       if [[ "$phase_has_deps" != "true" ]]; then
         err "ERROR: missing_field: phases[$p].depends_on"
       else
-        local phase_dep_count
-        phase_dep_count=$(echo "$json" | jq "(.phases[$p].depends_on // []) | length")
-        for ((pd=0; pd<phase_dep_count; pd++)); do
-          local phase_dep_ref
-          phase_dep_ref=$(echo "$json" | jq -r ".phases[$p].depends_on[$pd]")
+        local _pdeps
+        _pdeps=$(echo "$_phase_deps" | jq -r ".[$p][]?")
+        while IFS= read -r phase_dep_ref; do
+          [[ -z "$phase_dep_ref" ]] && continue
           if [[ " $seen_phase_letters " != *" $phase_dep_ref "* ]]; then
             err "ERROR: invalid_depends_on: Phase $letter references $phase_dep_ref which is not an earlier phase"
           fi
-        done
+        done <<< "$_pdeps"
       fi
 
       if [[ -n "$prev_phase_letter" ]]; then
@@ -199,35 +262,43 @@ do_schema() {
       esac
     fi
 
+    local _pcrit
+    _pcrit=$(echo "$_phase_criteria_json" | jq -c ".[$p]")
     local phase_criteria_count
-    phase_criteria_count=$(echo "$json" | jq "(.phases[$p].success_criteria // []) | length")
-    for ((c=0; c<phase_criteria_count; c++)); do
-      local run expect_exit expect_output
-      run=$(echo "$json" | jq -r ".phases[$p].success_criteria[$c].run // empty")
-      expect_exit=$(echo "$json" | jq -r ".phases[$p].success_criteria[$c].expect_exit // empty")
-      expect_output=$(echo "$json" | jq -r ".phases[$p].success_criteria[$c].expect_output // empty")
+    phase_criteria_count=$(echo "$_pcrit" | jq 'length')
+    if [[ "$phase_criteria_count" -gt 0 ]]; then
+      local _pcv=()
+      mapfile -d '' _pcv < <(echo "$_pcrit" | jq -j '[.[] | [(.run // ""), (.expect_exit // "" | tostring), (.expect_output // "")]] | map(map(. + "\u0000") | join("")) | join("")')
+      for ((c=0; c<phase_criteria_count; c++)); do
+        local cidx=$((c * 3))
+        local run="${_pcv[$cidx]}" expect_exit="${_pcv[$((cidx+1))]}" expect_output="${_pcv[$((cidx+2))]}"
+        [[ -z "$run" ]] && err "ERROR: empty_run: phase $letter success_criteria[$c]"
+        [[ -z "$expect_exit" && -z "$expect_output" ]] && err "ERROR: missing_expect: phase $letter success_criteria[$c] has neither expect_exit nor expect_output"
+      done
+    fi
 
-      [[ -z "$run" ]] && err "ERROR: empty_run: phase $letter success_criteria[$c]"
-      [[ -z "$expect_exit" && -z "$expect_output" ]] && err "ERROR: missing_expect: phase $letter success_criteria[$c] has neither expect_exit nor expect_output"
-    done
-
-    local letter_lower
-    letter_lower=$(echo "$letter" | tr '[:upper:]' '[:lower:]')
+    local letter_lower="${letter,,}"
     local phase_dir="phase-$letter_lower"
     if [[ ! -f "$plan_dir/$phase_dir/completion.md" ]]; then
       err "ERROR: missing_completion_file: $phase_dir/completion.md"
     fi
 
-    local task_count
-    task_count=$(echo "$json" | jq "(.phases[$p].tasks // []) | length")
+    # --- Validate tasks for this phase from pre-extracted scalars ---
+    local _phase_task_ids=()
+    local _phase_file_paths=()
+    local _phase_file_tids=()
+    for ((ti=0; ti<_total_tasks; ti++)); do
+      local tbase=$((ti * 11))
+      local _tp="${_ts[$tbase]}"
+      [[ "$_tp" != "$p" ]] && continue
 
-    for ((t=0; t<task_count; t++)); do
-      local id task_name task_status verification done_when
-      id=$(echo "$json" | jq -r ".phases[$p].tasks[$t].id // empty")
-      task_name=$(echo "$json" | jq -r ".phases[$p].tasks[$t].name // empty")
-      task_status=$(echo "$json" | jq -r ".phases[$p].tasks[$t].status // empty")
-      verification=$(echo "$json" | jq -r ".phases[$p].tasks[$t].verification // empty")
-      done_when=$(echo "$json" | jq -r ".phases[$p].tasks[$t].done_when // empty")
+      local t="${_ts[$((tbase+1))]}"
+      local id="${_ts[$((tbase+2))]}" task_name="${_ts[$((tbase+3))]}"
+      local task_status="${_ts[$((tbase+4))]}" verification="${_ts[$((tbase+5))]}"
+      local done_when="${_ts[$((tbase+6))]}"
+      local files_exists="${_ts[$((tbase+7))]}"
+      local create_exists="${_ts[$((tbase+8))]}" modify_exists="${_ts[$((tbase+9))]}"
+      local test_exists="${_ts[$((tbase+10))]}"
 
       [[ -z "$id" ]] && err "ERROR: missing_field: phases[$p].tasks[$t].id"
       [[ -z "$task_name" ]] && err "ERROR: missing_field: phases[$p].tasks[$t].name"
@@ -259,50 +330,39 @@ do_schema() {
         esac
       fi
 
-      local files_exists
-      files_exists=$(echo "$json" | jq ".phases[$p].tasks[$t] | has(\"files\")")
       if [[ "$files_exists" != "true" ]]; then
         err "ERROR: missing_field: phases[$p].tasks[$t].files"
       else
-        local create_exists modify_exists test_exists
-        create_exists=$(echo "$json" | jq ".phases[$p].tasks[$t].files | has(\"create\")")
-        modify_exists=$(echo "$json" | jq ".phases[$p].tasks[$t].files | has(\"modify\")")
-        test_exists=$(echo "$json" | jq ".phases[$p].tasks[$t].files | has(\"test\")")
-
         [[ "$create_exists" != "true" ]] && err "ERROR: missing_field: phases[$p].tasks[$t].files.create"
         [[ "$modify_exists" != "true" ]] && err "ERROR: missing_field: phases[$p].tasks[$t].files.modify"
         [[ "$test_exists" != "true" ]] && err "ERROR: missing_field: phases[$p].tasks[$t].files.test"
       fi
 
-      local depends_on_count
-      depends_on_count=$(echo "$json" | jq "(.phases[$p].tasks[$t].depends_on // []) | length")
-      if [[ "$depends_on_count" -gt 0 ]]; then
-        for ((d=0; d<depends_on_count; d++)); do
-          local dep_id
-          dep_id=$(echo "$json" | jq -r ".phases[$p].tasks[$t].depends_on[$d]")
+      # Task arrays — direct index into pre-split array (no jq per task)
+      local _tarr="${_task_arrays[$ti]}"
 
-          local found=0
-          if [[ ${#all_task_ids[@]} -gt 0 ]]; then
-            for existing_id in "${all_task_ids[@]}"; do
-              if [[ "$existing_id" == "$dep_id" ]]; then
-                found=1
-                break
-              fi
-            done
-          fi
+      local _task_deps
+      _task_deps=$(echo "$_tarr" | jq -r '.depends_on[]?')
+      while IFS= read -r dep_id; do
+        [[ -z "$dep_id" ]] && continue
+        local found=0
+        if [[ ${#all_task_ids[@]} -gt 0 ]]; then
+          for existing_id in "${all_task_ids[@]}"; do
+            if [[ "$existing_id" == "$dep_id" ]]; then
+              found=1
+              break
+            fi
+          done
+        fi
+        if [[ $found -eq 0 ]]; then
+          err "ERROR: invalid_dependency: task $id depends_on $dep_id which doesn't exist in same or prior phase"
+        fi
+      done <<< "$_task_deps"
 
-          if [[ $found -eq 0 ]]; then
-            err "ERROR: invalid_dependency: task $id depends_on $dep_id which doesn't exist in same or prior phase"
-          fi
-        done
-      fi
-
-      local create_count
-      create_count=$(echo "$json" | jq "(.phases[$p].tasks[$t].files.create // []) | length")
-      for ((f=0; f<create_count; f++)); do
-        local create_path
-        create_path=$(echo "$json" | jq -r ".phases[$p].tasks[$t].files.create[$f]")
-
+      local _create_paths
+      _create_paths=$(echo "$_tarr" | jq -r '.create[]?')
+      while IFS= read -r create_path; do
+        [[ -z "$create_path" ]] && continue
         if [[ ${#all_create_paths[@]} -gt 0 ]]; then
           for existing_path in "${all_create_paths[@]}"; do
             if [[ "$existing_path" == "$create_path" ]]; then
@@ -311,22 +371,44 @@ do_schema() {
           done
         fi
         all_create_paths+=("$create_path")
-      done
+      done <<< "$_create_paths"
 
+      local _tcrit
+      _tcrit=$(echo "$_tarr" | jq -c '.criteria // []')
       local task_criteria_count
-      task_criteria_count=$(echo "$json" | jq "(.phases[$p].tasks[$t].success_criteria // []) | length")
-      for ((c=0; c<task_criteria_count; c++)); do
-        local run expect_exit expect_output
-        run=$(echo "$json" | jq -r ".phases[$p].tasks[$t].success_criteria[$c].run // empty")
-        expect_exit=$(echo "$json" | jq -r ".phases[$p].tasks[$t].success_criteria[$c].expect_exit // empty")
-        expect_output=$(echo "$json" | jq -r ".phases[$p].tasks[$t].success_criteria[$c].expect_output // empty")
+      task_criteria_count=$(echo "$_tcrit" | jq 'length')
+      if [[ "$task_criteria_count" -gt 0 ]]; then
+        local _tcv=()
+        mapfile -d '' _tcv < <(echo "$_tcrit" | jq -j '[.[] | [(.run // ""), (.expect_exit // "" | tostring), (.expect_output // "")]] | map(map(. + "\u0000") | join("")) | join("")')
+        for ((c=0; c<task_criteria_count; c++)); do
+          local cidx=$((c * 3))
+          local run="${_tcv[$cidx]}" expect_exit="${_tcv[$((cidx+1))]}" expect_output="${_tcv[$((cidx+2))]}"
+          [[ -z "$run" ]] && err "ERROR: empty_run: task $id success_criteria[$c]"
+          [[ -z "$expect_exit" && -z "$expect_output" ]] && err "ERROR: missing_expect: task $id success_criteria[$c] has neither expect_exit nor expect_output"
+        done
+      fi
 
-        [[ -z "$run" ]] && err "ERROR: empty_run: task $id success_criteria[$c]"
-        [[ -z "$expect_exit" && -z "$expect_output" ]] && err "ERROR: missing_expect: task $id success_criteria[$c] has neither expect_exit nor expect_output"
-      done
+      # Fileset overlap — collect files during task validation (no second pass)
+      local _all_files
+      _all_files=$(echo "$_tarr" | jq -r '(.create[]?, .modify[]?, .test_files[]?)')
+      while IFS= read -r fpath; do
+        [[ -z "$fpath" ]] && continue
+        local existing_owner=""
+        for ((fi=0; fi<${#_phase_file_paths[@]}; fi++)); do
+          if [[ "${_phase_file_paths[$fi]}" == "$fpath" ]]; then
+            existing_owner="${_phase_file_tids[$fi]}"
+            break
+          fi
+        done
+        if [[ -n "$existing_owner" && "$existing_owner" != "$id" ]]; then
+          err "ERROR: fileset_overlap: file '$fpath' claimed by tasks $existing_owner and $id in phase $letter"
+        elif [[ -z "$existing_owner" ]]; then
+          _phase_file_paths+=("$fpath")
+          _phase_file_tids+=("$id")
+        fi
+      done <<< "$_all_files"
 
-      local id_lower
-      id_lower=$(echo "$id" | tr '[:upper:]' '[:lower:]')
+      local id_lower="${id,,}"
       local task_file="$plan_dir/$phase_dir/$id_lower.md"
       if [[ ! -f "$task_file" ]]; then
         err "ERROR: missing_task_file: $phase_dir/$id_lower.md"
@@ -348,49 +430,20 @@ do_schema() {
         local repo_root
         repo_root=$(git -C "$plan_dir" rev-parse --show-toplevel 2>/dev/null || echo "")
         if [[ -n "$repo_root" ]]; then
-          local fc_count
-          fc_count=$(echo "$json" | jq "(.phases[$p].tasks[$t].files.create // []) | length")
-          for ((fc=0; fc<fc_count; fc++)); do
-            local fc_path
-            fc_path=$(echo "$json" | jq -r ".phases[$p].tasks[$t].files.create[$fc]")
+          while IFS= read -r fc_path; do
+            [[ -z "$fc_path" ]] && continue
             if [[ ! -f "$repo_root/$fc_path" ]]; then
               err "ERROR: missing_created_file: task $id declares files.create '$fc_path' but file not found"
             fi
-          done
+          done <<< "$_create_paths"
         fi
       fi
 
       all_task_ids+=("$id")
+      _phase_task_ids+=("$id")
     done
 
-    local phase_file_paths=()
-    local phase_file_tids=()
-    for ((t=0; t<task_count; t++)); do
-      local tid
-      tid=$(echo "$json" | jq -r ".phases[$p].tasks[$t].id // empty")
-      for arr in create modify test; do
-        local arr_count
-        arr_count=$(echo "$json" | jq "(.phases[$p].tasks[$t].files.${arr} // []) | length")
-        for ((f=0; f<arr_count; f++)); do
-          local fpath
-          fpath=$(echo "$json" | jq -r ".phases[$p].tasks[$t].files.${arr}[$f]")
-          local existing_owner=""
-          for ((i=0; i<${#phase_file_paths[@]}; i++)); do
-            if [[ "${phase_file_paths[$i]}" == "$fpath" ]]; then
-              existing_owner="${phase_file_tids[$i]}"
-              break
-            fi
-          done
-          if [[ -n "$existing_owner" && "$existing_owner" != "$tid" ]]; then
-            err "ERROR: fileset_overlap: file '$fpath' claimed by tasks $existing_owner and $tid in phase $letter"
-          elif [[ -z "$existing_owner" ]]; then
-            phase_file_paths+=("$fpath")
-            phase_file_tids+=("$tid")
-          fi
-        done
-      done
-    done
-
+    # Orphan file check using pre-extracted task IDs
     local phase_full_dir="$plan_dir/$phase_dir"
     if [[ -d "$phase_full_dir" ]]; then
       for md_file in "$phase_full_dir"/*.md; do
@@ -400,10 +453,8 @@ do_schema() {
         [[ "$base_name" == "completion" ]] && continue
         [[ "$base_name" =~ -completion$ ]] && continue
         local found_task=0
-        for ((t=0; t<task_count; t++)); do
-          local tid_lower
-          tid_lower=$(echo "$json" | jq -r ".phases[$p].tasks[$t].id // empty" | tr '[:upper:]' '[:lower:]')
-          if [[ "$base_name" == "$tid_lower" ]]; then
+        for tid in "${_phase_task_ids[@]}"; do
+          if [[ "$base_name" == "${tid,,}" ]]; then
             found_task=1
             break
           fi
@@ -416,17 +467,11 @@ do_schema() {
 
   done
 
-  # Defense-in-depth: BFS cycle check across phase depends_on edges.
-  # The backward-reference check above already guarantees acyclicity:
-  # every depends_on entry must reference a phase that appeared earlier
-  # in the phases array, so forward references — and therefore cycles —
-  # are impossible by construction. This BFS block will never fire
-  # independently of that check; it is kept as a safety net in case the
-  # ordering constraint is relaxed in the future.
+  # Defense-in-depth: BFS cycle check using pre-extracted dependency graph
   local cd_cycle_detected=0
   for ((cd_start=0; cd_start<phase_count && cd_cycle_detected==0; cd_start++)); do
-    local cd_start_letter
-    cd_start_letter=$(echo "$json" | jq -r ".phases[$cd_start].letter")
+    local dbase=$((cd_start * 2))
+    local cd_start_letter="${_dep_graph[$dbase]}"
     local cd_visited=""
     local -a cd_queue=("$cd_start_letter")
     while [[ ${#cd_queue[@]} -gt 0 && $cd_cycle_detected -eq 0 ]]; do
@@ -436,20 +481,28 @@ do_schema() {
         continue
       fi
       cd_visited="$cd_visited $cd_current"
-      local cd_dep_cnt
-      cd_dep_cnt=$(echo "$json" | jq --arg l "$cd_current" '([.phases[] | select(.letter == $l)][0].depends_on // []) | length')
-      for ((cd_d=0; cd_d<cd_dep_cnt; cd_d++)); do
-        local cd_dep
-        cd_dep=$(echo "$json" | jq -r --arg l "$cd_current" --argjson idx "$cd_d" '([.phases[] | select(.letter == $l)][0].depends_on // [])[$idx]')
-        if [[ "$cd_dep" == "$cd_start_letter" && "$cd_current" != "$cd_start_letter" ]]; then
-          err "ERROR: circular_dependency: cycle detected involving phase $cd_start_letter"
-          cd_cycle_detected=1
+      local cd_deps_str=""
+      for ((di=0; di<phase_count; di++)); do
+        local dibase=$((di * 2))
+        if [[ "${_dep_graph[$dibase]}" == "$cd_current" ]]; then
+          cd_deps_str="${_dep_graph[$((dibase+1))]}"
           break
         fi
-        if [[ " $cd_visited " != *" $cd_dep "* ]]; then
-          cd_queue+=("$cd_dep")
-        fi
       done
+      if [[ -n "$cd_deps_str" ]]; then
+        IFS=',' read -ra cd_dep_arr <<< "$cd_deps_str"
+        for cd_dep in "${cd_dep_arr[@]}"; do
+          [[ -z "$cd_dep" ]] && continue
+          if [[ "$cd_dep" == "$cd_start_letter" && "$cd_current" != "$cd_start_letter" ]]; then
+            err "ERROR: circular_dependency: cycle detected involving phase $cd_start_letter"
+            cd_cycle_detected=1
+            break
+          fi
+          if [[ " $cd_visited " != *" $cd_dep "* ]]; then
+            cd_queue+=("$cd_dep")
+          fi
+        done
+      fi
     done
   done
 
@@ -459,7 +512,7 @@ do_schema() {
   fi
 
   # Chain to consistency checks so --schema callers don't lose coverage
-  if ! do_consistency "$plan_json"; then
+  if ! do_consistency "$plan_json" "$json"; then
     exit 1
   fi
   exit 0
@@ -467,67 +520,86 @@ do_schema() {
 
 do_consistency() {
   local plan_json="$1"
-  local json
-  json=$(cat "$plan_json")
+  local json="${2:-}"
+  if [[ -z "$json" ]]; then
+    json=$(cat "$plan_json")
+  fi
 
-  local plan_status
-  plan_status=$(echo "$json" | jq -r '.status // empty')
+  if ! echo "$json" | jq -e . >/dev/null 2>&1; then
+    echo "ERROR: invalid JSON in $plan_json" >&2
+    return 1
+  fi
 
-  local phase_count
-  phase_count=$(echo "$json" | jq '(.phases // []) | length')
+  # Bulk extract: plan_status, phase_count, then per-phase (letter, status, task_count)
+  # and per-task (id, status, depends_on as comma-separated) — all NUL-delimited
+  local _cv=()
+  mapfile -d '' _cv < <(echo "$json" | jq -j '
+    [(.status // ""), ((.phases // []) | length | tostring)] | map(. + "\u0000") | join("")')
+  local plan_status="${_cv[0]}" phase_count="${_cv[1]}"
+
+  # Phase scalars: stride 3 (letter, status, task_count)
+  local _cp=()
+  mapfile -d '' _cp < <(echo "$json" | jq -j '
+    [.phases // [] | .[] | [
+      (.letter // ""), (.status // ""), ((.tasks // []) | length | tostring)
+    ] | map(. + "\u0000") | join("")] | join("")')
+
+  # Task scalars: stride 4 (phase_idx, id, status, depends_on comma-separated)
+  local _ct=()
+  mapfile -d '' _ct < <(echo "$json" | jq -j '
+    [.phases // [] | to_entries[] | .key as $pi |
+     (.value.tasks // [])[] | [
+      ($pi | tostring), (.id // ""), (.status // ""),
+      ((.depends_on // []) | join(","))
+    ] | map(. + "\u0000") | join("")] | join("")')
+  local _total_ct=$(( ${#_ct[@]} / 4 ))
+
+  # Build task status lookup for O(1) dependency checks
+  declare -A _task_status_map
+  for ((i=0; i<_total_ct; i++)); do
+    local ibase=$((i * 4))
+    _task_status_map["${_ct[$((ibase+1))]}"]="${_ct[$((ibase+2))]}"
+  done
 
   ERRORS=()
 
   for ((p=0; p<phase_count; p++)); do
-    local letter phase_status
-    letter=$(echo "$json" | jq -r ".phases[$p].letter // empty")
-    phase_status=$(echo "$json" | jq -r ".phases[$p].status // empty")
-    local task_count
-    task_count=$(echo "$json" | jq "(.phases[$p].tasks // []) | length")
+    local pbase=$((p * 3))
+    local letter="${_cp[$pbase]}" phase_status="${_cp[$((pbase+1))]}"
+    local task_count="${_cp[$((pbase+2))]}"
 
     if [[ "$phase_status" == "Not Started" ]]; then
-      for ((t=0; t<task_count; t++)); do
-        local ts
-        ts=$(echo "$json" | jq -r ".phases[$p].tasks[$t].status // empty")
+      for ((i=0; i<_total_ct; i++)); do
+        local ibase=$((i * 4))
+        [[ "${_ct[$ibase]}" != "$p" ]] && continue
+        local ts="${_ct[$((ibase+2))]}"
         if [[ "$ts" == "in_progress" || "$ts" == "complete" ]]; then
-          err "ERROR: status_inconsistency: phase $letter is 'Not Started' but task $(echo "$json" | jq -r ".phases[$p].tasks[$t].id") is '$ts'"
+          err "ERROR: status_inconsistency: phase $letter is 'Not Started' but task ${_ct[$((ibase+1))]} is '$ts'"
         fi
       done
     fi
 
     if [[ "$phase_status" =~ ^Complete ]]; then
-      for ((t=0; t<task_count; t++)); do
-        local ts
-        ts=$(echo "$json" | jq -r ".phases[$p].tasks[$t].status // empty")
+      for ((i=0; i<_total_ct; i++)); do
+        local ibase=$((i * 4))
+        [[ "${_ct[$ibase]}" != "$p" ]] && continue
+        local ts="${_ct[$((ibase+2))]}"
         if [[ "$ts" != "complete" && "$ts" != "skipped" ]]; then
-          err "ERROR: status_inconsistency: phase $letter is '$phase_status' but task $(echo "$json" | jq -r ".phases[$p].tasks[$t].id") is '$ts'"
+          err "ERROR: status_inconsistency: phase $letter is '$phase_status' but task ${_ct[$((ibase+1))]} is '$ts'"
         fi
       done
     fi
 
-    for ((t=0; t<task_count; t++)); do
-      local ts tid
-      ts=$(echo "$json" | jq -r ".phases[$p].tasks[$t].status // empty")
-      tid=$(echo "$json" | jq -r ".phases[$p].tasks[$t].id // empty")
-      if [[ "$ts" == "complete" ]]; then
-        local dep_count
-        dep_count=$(echo "$json" | jq "(.phases[$p].tasks[$t].depends_on // []) | length")
-        for ((d=0; d<dep_count; d++)); do
-          local dep_id
-          dep_id=$(echo "$json" | jq -r ".phases[$p].tasks[$t].depends_on[$d]")
-          local dep_status=""
-          for ((p2=0; p2<phase_count; p2++)); do
-            local tc2
-            tc2=$(echo "$json" | jq "(.phases[$p2].tasks // []) | length")
-            for ((t2=0; t2<tc2; t2++)); do
-              local tid2
-              tid2=$(echo "$json" | jq -r ".phases[$p2].tasks[$t2].id")
-              if [[ "$tid2" == "$dep_id" ]]; then
-                dep_status=$(echo "$json" | jq -r ".phases[$p2].tasks[$t2].status")
-                break 2
-              fi
-            done
-          done
+    for ((i=0; i<_total_ct; i++)); do
+      local ibase=$((i * 4))
+      [[ "${_ct[$ibase]}" != "$p" ]] && continue
+      local tid="${_ct[$((ibase+1))]}" ts="${_ct[$((ibase+2))]}"
+      local deps_str="${_ct[$((ibase+3))]}"
+      if [[ "$ts" == "complete" && -n "$deps_str" ]]; then
+        IFS=',' read -ra dep_arr <<< "$deps_str"
+        for dep_id in "${dep_arr[@]}"; do
+          [[ -z "$dep_id" ]] && continue
+          local dep_status="${_task_status_map[$dep_id]:-}"
           if [[ "$dep_status" == "pending" || "$dep_status" == "in_progress" ]]; then
             err "ERROR: status_inconsistency: task $tid is 'complete' but dependency $dep_id is '$dep_status'"
           fi
@@ -536,8 +608,7 @@ do_consistency() {
     done
 
     if [[ "$phase_status" =~ ^Complete ]]; then
-      local letter_lower
-      letter_lower=$(echo "$letter" | tr '[:upper:]' '[:lower:]')
+      local letter_lower="${letter,,}"
       local plan_dir
       plan_dir="$(cd "$(dirname "$plan_json")" && pwd)"
       if ! check_review_record "$plan_dir" "impl-review" "phase-$letter_lower" > /dev/null 2>&1; then
@@ -548,20 +619,20 @@ do_consistency() {
 
   if [[ "$plan_status" == "Not Yet Started" ]]; then
     for ((p=0; p<phase_count; p++)); do
-      local ps
-      ps=$(echo "$json" | jq -r ".phases[$p].status // empty")
+      local pbase=$((p * 3))
+      local ps="${_cp[$((pbase+1))]}"
       if [[ "$ps" == "In Progress" || "$ps" =~ ^Complete ]]; then
-        err "ERROR: status_inconsistency: plan is 'Not Yet Started' but phase $(echo "$json" | jq -r ".phases[$p].letter") is '$ps'"
+        err "ERROR: status_inconsistency: plan is 'Not Yet Started' but phase ${_cp[$pbase]} is '$ps'"
       fi
     done
   fi
 
   if [[ "$plan_status" == "Complete" ]]; then
     for ((p=0; p<phase_count; p++)); do
-      local ps
-      ps=$(echo "$json" | jq -r ".phases[$p].status // empty")
+      local pbase=$((p * 3))
+      local ps="${_cp[$((pbase+1))]}"
       if [[ ! "$ps" =~ ^Complete ]]; then
-        err "ERROR: status_inconsistency: plan is Complete but phase $(echo "$json" | jq -r ".phases[$p].letter") is '$ps'"
+        err "ERROR: status_inconsistency: plan is Complete but phase ${_cp[$pbase]} is '$ps'"
       fi
     done
   fi
