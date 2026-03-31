@@ -10,7 +10,7 @@
       "description": "claude-caliper bundle",
 
 
-      "version": "1.21.4",
+      "version": "1.22.0",
 
       "source": "./",
       "author": {
@@ -31,14 +31,15 @@
         "./skills/pr-merge",
         "./skills/skill-eval",
         "./skills/caliper-settings"
-      ]
+      ],
+      "hooks": "./hooks/hooks.json"
     },
     {
       "name": "claude-caliper-workflow",
       "description": "End-to-end development workflow: design → draft-plan → orchestrate → review → pr-create → pr-review → pr-merge",
 
 
-      "version": "1.21.4",
+      "version": "1.22.0",
 
       "source": "./",
       "author": {
@@ -57,14 +58,15 @@
         "./skills/pr-review",
         "./skills/pr-merge",
         "./skills/caliper-settings"
-      ]
+      ],
+      "hooks": "./hooks/hooks.json"
     },
     {
       "name": "claude-caliper-tooling",
       "description": "Standalone tools: codebase audit and skill evaluation",
 
 
-      "version": "1.21.4",
+      "version": "1.22.0",
 
       "source": "./",
       "author": {
