@@ -1,6 +1,6 @@
 # Implementer Invocation Template
 
-Use this template when dispatching a task-implementer agent. The agent's static behavior (test-driven workflow, deviation rules, self-review, completion notes) is defined in the `claude-caliper:task-implementer` agent definition. This template provides only the dynamic per-invocation context.
+Use this template when dispatching a task-implementer agent. The agent's static behavior (test-driven workflow, deviation rules, self-review, completion notes) is defined in the `tcoder:task-implementer` agent definition. This template provides only the dynamic per-invocation context.
 
 **Variables:**
 - `{TASK_ID}` — the task ID (e.g., A1)
@@ -9,12 +9,12 @@ Use this template when dispatching a task-implementer agent. The agent's static 
 - `{TASK_PROSE}` — content of the task .md file
 - `{PLAN_DIR}` — absolute path to plan directory
 - `{PHASE_DIR}` — absolute path to phase directory
-- `{TASK_IMPLEMENTER_MODEL}` — model for the implementer agent (from caliper-settings)
+- `{TASK_IMPLEMENTER_MODEL}` — model for the implementer agent (from tcoder-settings)
 - `{WORKTREE_PATH}` — absolute path to the task's worktree (subagents mode only — orchestrator creates via `git worktree add`). In agent-teams mode, omit this variable — the teammate uses its auto-provisioned CWD.
 
 ```text
 Agent(
-  subagent_type: "claude-caliper:task-implementer",
+  subagent_type: "tcoder:task-implementer",
   model: "{TASK_IMPLEMENTER_MODEL}",
   prompt: "You are implementing {TASK_ID}: [task name]
 

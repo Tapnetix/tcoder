@@ -14,8 +14,8 @@ TASK_METADATA=$(jq -c --arg id "{TASK_ID}" '[.phases[].tasks[] | select(.id == $
 Then dispatch **all ready implementers in a single message** with multiple Agent tool calls — one per task. Splitting them across turns breaks parallelism and forces cache reloads for each agent.
 
 ```text
-Agent(name: "impl-{TASK_ID_LOWER}", subagent_type: "claude-caliper:task-implementer", model: "{TASK_IMPLEMENTER_MODEL}", prompt: "...")
-Agent(name: "impl-{TASK_ID_LOWER}", subagent_type: "claude-caliper:task-implementer", model: "{TASK_IMPLEMENTER_MODEL}", prompt: "...")
+Agent(name: "impl-{TASK_ID_LOWER}", subagent_type: "tcoder:task-implementer", model: "{TASK_IMPLEMENTER_MODEL}", prompt: "...")
+Agent(name: "impl-{TASK_ID_LOWER}", subagent_type: "tcoder:task-implementer", model: "{TASK_IMPLEMENTER_MODEL}", prompt: "...")
 ... (one per ready task)
 ```
 
@@ -33,7 +33,7 @@ When a background agent completes (push notification — do not poll):
 ```text
 Agent(
   name: "review-{TASK_ID_LOWER}",
-  subagent_type: "claude-caliper:task-reviewer",
+  subagent_type: "tcoder:task-reviewer",
   model: "{TASK_REVIEWER_MODEL}",
   run_in_background: false,
   prompt: "<substitute task-reviewer-prompt.md with all {VARIABLES}>"
@@ -45,7 +45,7 @@ Agent(
 
 ## Review Fix Cycle
 
-If fixes needed, dispatch a new `claude-caliper:task-implementer` agent into the same worktree to apply fixes — the lead coordinates, implementers touch code.
+If fixes needed, dispatch a new `tcoder:task-implementer` agent into the same worktree to apply fixes — the lead coordinates, implementers touch code.
 
 1. Read the reviewer's findings
 2. Dispatch a fix agent with the reviewer's findings and the task context, targeting the existing worktree path

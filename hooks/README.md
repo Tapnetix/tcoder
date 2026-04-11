@@ -1,6 +1,6 @@
 # Hooks and Safe Commands
 
-Hook scripts and configuration for the claude-caliper plugin.
+Hook scripts and configuration for the tcoder plugin.
 
 ## Files
 

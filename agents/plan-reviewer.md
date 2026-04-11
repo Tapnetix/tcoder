@@ -5,7 +5,7 @@ model: inherit
 tools: [Read, Grep, Glob, Bash]
 memory: project
 maxTurns: 30
-effort: medium
+effort: high
 background: true
 ---
 
@@ -59,6 +59,7 @@ For each task with test steps:
 - Function signatures match between test and implementation?
 - Return values consistent?
 - TDD 5-step cycle present? (write fail, verify fail, implement, verify pass, commit)
+- Testing coverage close to 100%?
 
 For multi-task plans with cross-task data flow:
 - First task (e.g., A1) as broad integration tests present?

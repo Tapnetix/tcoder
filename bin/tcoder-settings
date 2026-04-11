@@ -23,7 +23,7 @@ if [[ -f "$SETTINGS_FILE" ]]; then
 fi
 
 usage() {
-  echo "Usage: caliper-settings <subcommand> [args]" >&2
+  echo "Usage: tcoder-settings <subcommand> [args]" >&2
   echo "" >&2
   echo "Subcommands:" >&2
   echo "  list              Show all settings with current and default values" >&2

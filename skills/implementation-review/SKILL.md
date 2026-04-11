@@ -25,7 +25,7 @@ Skip if: single-module change or purely additive tasks with no interactions.
 
 ## How to Dispatch
 
-Use `subagent_type: "claude-caliper:implementation-reviewer"` with the invocation template in `./reviewer-prompt.md`. The agent's static behavior (8-category cross-task checklist, output format) is in the agent definition.
+Use `subagent_type: "tcoder:implementation-reviewer"` with the invocation template in `./reviewer-prompt.md`. The agent's static behavior (8-category cross-task checklist, output format) is in the agent definition.
 
 Template variables:
 
@@ -70,7 +70,7 @@ After review passes, the **orchestrator** updates the plan document:
 
 ## Re-Review Gate
 
-Read the threshold: `caliper-settings get re_review_threshold` (default: 5). If the reviewer finds more issues than this threshold: after all fixes are applied, dispatch a fresh reviewer subagent with the same full review scope. This catches reviewer hallucination from compounding and new issues introduced by bulk fixes.
+Read the threshold: `tcoder-settings get re_review_threshold` (default: 5). If the reviewer finds more issues than this threshold: after all fixes are applied, dispatch a fresh reviewer subagent with the same full review scope. This catches reviewer hallucination from compounding and new issues introduced by bulk fixes.
 
 At or under the threshold, the orchestrator verifies fixes and proceeds without re-review.
 

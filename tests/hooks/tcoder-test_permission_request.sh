@@ -33,7 +33,7 @@ TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 echo "Test 1: Sentinel exists returns allow+setMode JSON and consumes sentinel"
-SENTINEL_DIR1="$TMPDIR/.claude/claude-caliper/2026-03-20-topic"
+SENTINEL_DIR1="$TMPDIR/.claude/tcoder/2026-03-20-topic"
 mkdir -p "$SENTINEL_DIR1"
 touch "$SENTINEL_DIR1/.design-approved"
 INPUT1=$(jq -n --arg cwd "$TMPDIR" '{cwd: $cwd}')
@@ -52,7 +52,7 @@ OUTPUT2=$(echo "$INPUT2" | bash "$HOOK" 2>/dev/null)
 assert_output_empty "missing sentinel produces no output" "$OUTPUT2"
 
 echo "Test 3: Worktree search path finds sentinel and consumes it"
-WORKTREE_SENTINEL="$TMPDIR/.claude/worktrees/my-branch/.claude/claude-caliper/2026-03-20-topic"
+WORKTREE_SENTINEL="$TMPDIR/.claude/worktrees/my-branch/.claude/tcoder/2026-03-20-topic"
 mkdir -p "$WORKTREE_SENTINEL"
 touch "$WORKTREE_SENTINEL/.design-approved"
 INPUT3=$(jq -n --arg cwd "$TMPDIR" '{cwd: $cwd}')
@@ -71,10 +71,10 @@ INPUT4=$(jq -n '{cwd: ""}')
 OUTPUT4=$(echo "$INPUT4" | bash "$HOOK" 2>/dev/null)
 assert_output_empty "empty cwd produces no output" "$OUTPUT4"
 
-echo "Test 5: Auto-approve for .claude/claude-caliper/ file paths"
-INPUT5=$(jq -n --arg cwd "$TMPDIR" '{cwd: $cwd, tool_input: {file_path: "/some/project/.claude/claude-caliper/2026-03-20-topic/plan.md"}}')
+echo "Test 5: Auto-approve for .claude/tcoder/ file paths"
+INPUT5=$(jq -n --arg cwd "$TMPDIR" '{cwd: $cwd, tool_input: {file_path: "/some/project/.claude/tcoder/2026-03-20-topic/plan.md"}}')
 OUTPUT5=$(echo "$INPUT5" | bash "$HOOK" 2>/dev/null)
-assert_output_contains "auto-approve allows .claude/claude-caliper/ path" "$OUTPUT5" '"behavior": "allow"'
+assert_output_contains "auto-approve allows .claude/tcoder/ path" "$OUTPUT5" '"behavior": "allow"'
 if echo "$OUTPUT5" | grep -qF '"updatedPermissions"'; then
   echo "FAIL: auto-approve should not include updatedPermissions"
   ((FAIL++)) || true
@@ -92,12 +92,12 @@ run_allow() {
   echo "$json" | CLAUDE_SAFE_COMMANDS_FILE="$REPO_ROOT/hooks/safe-commands.txt" CLAUDE_SAFE_CMDS_LOG="/dev/null" "$ALLOW_HOOK" 2>/dev/null || true
 }
 
-echo "Test 6: Bash rm on .claude/claude-caliper/ path auto-allowed via PermissionRequest"
-OUTPUT6=$(run_allow "rm /some/project/.claude/claude-caliper/2026-03-31-topic/phase-a/a7.md")
+echo "Test 6: Bash rm on .claude/tcoder/ path auto-allowed via PermissionRequest"
+OUTPUT6=$(run_allow "rm /some/project/.claude/tcoder/2026-03-31-topic/phase-a/a7.md")
 assert_output_contains "Bash rm on plan path auto-allowed" "$OUTPUT6" '"behavior":"allow"'
 
-echo "Test 7: Bash mkdir on .claude/claude-caliper/ path auto-allowed via PermissionRequest"
-OUTPUT7=$(run_allow "mkdir -p /project/.claude/claude-caliper/2026-03-31-topic/phase-b")
+echo "Test 7: Bash mkdir on .claude/tcoder/ path auto-allowed via PermissionRequest"
+OUTPUT7=$(run_allow "mkdir -p /project/.claude/tcoder/2026-03-31-topic/phase-b")
 assert_output_contains "Bash mkdir on plan path auto-allowed" "$OUTPUT7" '"behavior":"allow"'
 
 echo "Test 8: Bash on non-plan .claude/ path NOT auto-allowed (falls through)"
@@ -111,7 +111,7 @@ else
 fi
 
 echo "Test 9: Non-Bash tool ignored by allow hook"
-INPUT9=$(jq -n '{tool_name: "Edit", tool_input: {file_path: "/.claude/claude-caliper/foo"}, session_id: "test-session"}')
+INPUT9=$(jq -n '{tool_name: "Edit", tool_input: {file_path: "/.claude/tcoder/foo"}, session_id: "test-session"}')
 OUTPUT9=$(echo "$INPUT9" | CLAUDE_SAFE_COMMANDS_FILE="$REPO_ROOT/hooks/safe-commands.txt" CLAUDE_SAFE_CMDS_LOG="/dev/null" "$ALLOW_HOOK" 2>/dev/null || true)
 assert_output_empty "non-Bash tool ignored" "$OUTPUT9"
 

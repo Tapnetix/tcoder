@@ -1,21 +1,21 @@
 {
-  "name": "claude-caliper",
+  "name": "tcoder",
   "owner": {
-    "name": "Nikhil Sitaram",
-    "email": "nikhil5890@gmail.com"
+    "name": "Tapnetix",
+    "email": "donotspam@tapnetix.com"
   },
   "plugins": [
     {
-      "name": "claude-caliper",
-      "description": "claude-caliper bundle",
+      "name": "tcoder",
+      "description": "tcoder bundle",
 
 
-      "version": "1.33.0",
+      "version": "1.0.0",
 
       "source": "./",
       "author": {
-        "name": "Nikhil Sitaram",
-        "email": "nikhil5890@gmail.com"
+        "name": "Tapnetix",
+        "email": "donotspam@tapnetix.com"
       },
       "strict": false,
       "skills": [
@@ -30,20 +30,20 @@
         "./skills/pr-review",
         "./skills/pr-merge",
         "./skills/skill-eval",
-        "./skills/caliper-settings"
+        "./skills/tcoder-settings"
       ]
     },
     {
-      "name": "claude-caliper-workflow",
+      "name": "tcoder",
       "description": "End-to-end development workflow: design → draft-plan → orchestrate → review → pr-create → pr-review → pr-merge",
 
 
-      "version": "1.33.0",
+      "version": "1.0.0",
 
       "source": "./",
       "author": {
-        "name": "Nikhil Sitaram",
-        "email": "nikhil5890@gmail.com"
+        "name": "Tapnetix",
+        "email": "donotspam@tapnetix.com"
       },
       "strict": false,
       "skills": [
@@ -56,20 +56,20 @@
         "./skills/pr-create",
         "./skills/pr-review",
         "./skills/pr-merge",
-        "./skills/caliper-settings"
+        "./skills/tcoder-settings"
       ]
     },
     {
-      "name": "claude-caliper-tooling",
+      "name": "tcoder-tooling",
       "description": "Standalone tools: codebase audit and skill evaluation",
 
 
-      "version": "1.33.0",
+      "version": "1.0.0",
 
       "source": "./",
       "author": {
-        "name": "Nikhil Sitaram",
-        "email": "nikhil5890@gmail.com"
+        "name": "Tapnetix",
+        "email": "donotspam@tapnetix.com"
       },
       "strict": false,
       "skills": [

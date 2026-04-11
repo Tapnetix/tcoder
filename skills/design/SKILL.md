@@ -33,7 +33,7 @@ Complete in order:
 7. **Configure and approve** — single AskUserQuestion with 3 questions:
 
     **Q1 — Workflow** (header: "Workflow"):
-    Run `caliper-settings get workflow`.
+    Run `tcoder-settings get workflow`.
     - If a value is returned (e.g. `pr-create`): skip this question. Message: "Using your configured workflow: <value>".
     - If `PROMPT_REQUIRED`: include in AskUserQuestion with recommended option marked "(Recommended)":
       - **Create PR** — Orchestrate → pr-create (Recommended)
@@ -41,7 +41,7 @@ Complete in order:
       - **Plan only** — Stop after plan is reviewed
 
     **Q2 — Execution mode** (header: "Exec mode"):
-    Run `caliper-settings get execution_mode`.
+    Run `tcoder-settings get execution_mode`.
     - If a value is returned (e.g. `subagents`): skip this question. Message: "Using your configured execution mode: <value>".
     - If `PROMPT_REQUIRED`: include in AskUserQuestion. Recommend based on design complexity:
       - ≤10 tasks AND single phase → recommend `Subagents`
@@ -60,7 +60,7 @@ Complete in order:
     **Agent teams fallback:** If user picks "Agent teams", check `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. If not `1`, use AskUserQuestion to explain: "Agent teams requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. To enable: run `echo 'export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1' >> ~/.zshrc && source ~/.zshrc`, then restart Claude Code." Offer: "Continue with subagents" or "Stop (I'll restart with agent teams)". If they choose subagents, override the Q2 answer to `Subagents` before step 11 writes plan.json. If they stop, tell them the exact command to resume: `claude --continue` in the worktree directory.
 
     On approval, create sentinel: `mkdir -p <plan-dir> && touch <plan-dir>/.design-approved`
-8. **Write design doc** — `.claude/claude-caliper/YYYY-MM-DD-<topic>/design-<topic>.md` (no commit — gitignored transient state)
+8. **Write design doc** — `.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.md` (no commit — gitignored transient state)
 
    Before dispatching design-review, verify the doc satisfies this quality checklist (catches the most common reviewer findings on first pass):
    - Success criteria are behavioral outcomes, not implementation details ("users can log in" not "tests pass" or "middleware installed")
@@ -83,13 +83,13 @@ Complete in order:
     For **Create PR** or **Merge PR**: invoke orchestrate.
     For **Plan only**: run `validate-plan --check-workflow plan.json` to verify design-review and plan-review passed. Report the plan file path and stop.
 
-Read the design reviewer model: `DESIGN_REVIEWER_MODEL=$(caliper-settings get design_reviewer_model)`
+Read the design reviewer model: `DESIGN_REVIEWER_MODEL=$(tcoder-settings get design_reviewer_model)`
 
 ```text
 Agent(
-  subagent_type: "claude-caliper:design-reviewer",
+  subagent_type: "tcoder:design-reviewer",
   model: "$DESIGN_REVIEWER_MODEL",
-  prompt: "Review the design doc at .claude/claude-caliper/<folder>/design-<topic>.md
+  prompt: "Review the design doc at .claude/tcoder/<folder>/design-<topic>.md
 
     Codebase root: .claude/worktrees/<feature>"
 )
@@ -120,9 +120,9 @@ After each reviewer dispatch, extract the `json review-summary` block from the r
 
    ```text
    Agent(
-     subagent_type: "claude-caliper:design-reviewer",
+     subagent_type: "tcoder:design-reviewer",
      model: "$DESIGN_REVIEWER_MODEL",
-     prompt: "Review the design doc at .claude/claude-caliper/<folder>/design-<topic>.md
+     prompt: "Review the design doc at .claude/tcoder/<folder>/design-<topic>.md
 
        Codebase root: .claude/worktrees/<feature>
 
@@ -133,36 +133,36 @@ After each reviewer dispatch, extract the `json review-summary` block from the r
 
 **If reviewer passes (zero issues):** Write the passing record to reviews.json (`ITER`, `remaining`:0, verdict: pass) and proceed to step 11.
 
-Read the planner model: `PLANNER_MODEL=$(caliper-settings get planner_model)`
+Read the planner model: `PLANNER_MODEL=$(tcoder-settings get planner_model)`
 
 ```text
 Agent(
-  subagent_type: "claude-caliper:plan-drafter",
+  subagent_type: "tcoder:plan-drafter",
   model: "$PLANNER_MODEL",
-  prompt: "Read the design doc at .claude/claude-caliper/<folder>/design-<topic>.md and write
+  prompt: "Read the design doc at .claude/tcoder/<folder>/design-<topic>.md and write
     an implementation plan.
 
     Working directory: .claude/worktrees/<feature>
-    Plan directory: .claude/claude-caliper/<folder>/"
+    Plan directory: .claude/tcoder/<folder>/"
 )
 ```
 
 After draft-plan returns, dispatch plan-review with the same review loop protocol:
 
-Read the plan reviewer model: `PLAN_REVIEWER_MODEL=$(caliper-settings get plan_reviewer_model)`
+Read the plan reviewer model: `PLAN_REVIEWER_MODEL=$(tcoder-settings get plan_reviewer_model)`
 
 ```text
 Agent(
-  subagent_type: "claude-caliper:plan-reviewer",
+  subagent_type: "tcoder:plan-reviewer",
   model: "$PLAN_REVIEWER_MODEL",
-  prompt: "Review the implementation plan at .claude/claude-caliper/<folder>/plan.json
+  prompt: "Review the implementation plan at .claude/tcoder/<folder>/plan.json
 
-    Design doc: .claude/claude-caliper/<folder>/design-<topic>.md
+    Design doc: .claude/tcoder/<folder>/design-<topic>.md
     Codebase root: .claude/worktrees/<feature>"
 )
 ```
 
-Extract the `json review-summary` block from the response. Triage issues (fix plan files or dismiss with reasoning). Read the threshold: `caliper-settings get re_review_threshold`. If actionable issues exceed this threshold, fix and re-dispatch reviewer (max 3 iterations, then escalate to user). Write review record to `{PLAN_DIR}/reviews.json`: `{"type":"plan-review","scope":"plan","iteration":N,"issues_found":N,"severity":{...},"actionable":N,"dismissed":N,"dismissals":[...],"fixed":N,"remaining":0,"verdict":"pass","timestamp":"ISO8601"}` (Note: plan-review intentionally uses the `re_review_threshold`-based gate, not severity-gated termination — the two loops use different termination models by design.)
+Extract the `json review-summary` block from the response. Triage issues (fix plan files or dismiss with reasoning). Read the threshold: `tcoder-settings get re_review_threshold`. If actionable issues exceed this threshold, fix and re-dispatch reviewer (max 3 iterations, then escalate to user). Write review record to `{PLAN_DIR}/reviews.json`: `{"type":"plan-review","scope":"plan","iteration":N,"issues_found":N,"severity":{...},"actionable":N,"dismissed":N,"dismissals":[...],"fixed":N,"remaining":0,"verdict":"pass","timestamp":"ISO8601"}` (Note: plan-review intentionally uses the `re_review_threshold`-based gate, not severity-gated termination — the two loops use different termination models by design.)
 
 
 ## Challenging Assumptions
@@ -198,7 +198,7 @@ Use AskUserQuestion with "Looks good" / "Adjust phases" options.
 
 ## Design Doc Contents
 
-When writing the design doc (`.claude/claude-caliper/YYYY-MM-DD-<topic>/design-<topic>.md`):
+When writing the design doc (`.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.md`):
 - Sections in order: Problem, Goal, Success Criteria, Architecture, Key Decisions, Non-Goals, Implementation Approach
 - **Problem** — what's broken, who's affected, consequences of not solving
 - **Success Criteria** — human-verifiable behavioral statements (not "tests pass"); collectively complete (all pass = goal met), individually necessary

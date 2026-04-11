@@ -1,9 +1,9 @@
 ---
-name: caliper-settings
-description: Use when the user wants to view, change, or reset their persistent preferences, or when triggered by "/caliper-settings", "my settings", "change defaults".
+name: tcoder-settings
+description: Use when the user wants to view, change, or reset their persistent preferences, or when triggered by "/tcoder-settings", "my settings", "change defaults".
 ---
 
-# Caliper Settings
+# tCoder Settings
 
 View and manage persistent user preferences. Settings follow 3-tier precedence: CLI flag > user setting > shipped default.
 
@@ -12,10 +12,10 @@ View and manage persistent user preferences. Settings follow 3-tier precedence: 
 Run the settings script to manage preferences:
 
 ```bash
-caliper-settings list
-caliper-settings get <key>
-caliper-settings set <key> <value>
-caliper-settings reset [key]
+tcoder-settings list
+tcoder-settings get <key>
+tcoder-settings set <key> <value>
+tcoder-settings reset [key]
 ```
 
 ### List all settings

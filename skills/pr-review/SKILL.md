@@ -28,7 +28,7 @@ If `--automated`/`-A` passed, use automated mode. `--automated` + `--skip-fixes`
 If no flag, read the user's preference:
 
 ```bash
-mode=$(caliper-settings get review_mode)
+mode=$(tcoder-settings get review_mode)
 ```
 
 - If a mode is returned (`automated` or `deliberate`): the user explicitly configured this. Use it.
@@ -50,9 +50,9 @@ If rebased, log it. If conflicts, stop and ask user. After force-push, only proc
 
 ### Step 4: Dispatch Subagent in Background
 
-Skip if `--skip-review` passed or `caliper-settings get skip_review` returns `true`.
+Skip if `--skip-review` passed or `tcoder-settings get skip_review` returns `true`.
 
-Read PR reviewer model: `caliper-settings get pr_reviewer_model` — substitute into `reviewer-prompt.md`'s `model:` field.
+Read PR reviewer model: `tcoder-settings get pr_reviewer_model` — substitute into `reviewer-prompt.md`'s `model:` field.
 
 Read `reviewer-prompt.md` and dispatch with `run_in_background: true`:
 - `{DIFF_RANGE}` = `origin/$BASE_BRANCH..HEAD`
@@ -69,7 +69,7 @@ Subagent posts findings as `gh pr comment`, then returns them for Step 6.
 - Deliberate: no warm-up, poll every 60s.
 - Poll until all checks complete and no "processing"/"in progress" indicators in comments.
 - Bot rate-limit warning = treat as ready.
-- Timeout: `caliper-settings get review_wait_minutes` (default: 5).
+- Timeout: `tcoder-settings get review_wait_minutes` (default: 5).
 
 **Collect from all three sources:**
 1. Conversation comments: `gh pr view --json comments`

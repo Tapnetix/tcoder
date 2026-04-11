@@ -1,15 +1,15 @@
 <div align="center">
 
-<img src="assets/banner.png" alt="claude-caliper banner" width="700">
+<img src="assets/banner.png" alt="tcoder banner" width="700">
 
-# claude-caliper
+# TCoder
 
-**Measure twice, cut once.**
+**Always design, review and test.**
 
 A Claude Code plugin that turns your goal into a PR with as little friction as possible. Every step is reviewed with a fresh context subagent. You get a design-reviewed, plan-validated, test-driven PR — with three human decisions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.20.0-blue)](https://github.com/nikhilsitaram/claude-caliper/releases)
+[![Version](https://img.shields.io/badge/version-1.20.0-blue)](https://github.com/Tapnetix/tcoder/releases)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-6E40C9?logo=anthropic&logoColor=white)](https://claude.ai/code)
 [![Skills](https://img.shields.io/badge/11%20skills-included-2ea44f)](skills/)
 
@@ -23,7 +23,7 @@ Many claude workflows are either improperly context engineered, overly complicat
 
 ## The Fix
 
-Install claude-caliper. Describe what you want to build. Walk away.
+Install tcoder. Describe what you want to build. Walk away.
 
 The plugin installs 11 skills that fire automatically at the right moment, enforcing a full development workflow: **design before plan, plan before code, test before merge.** You make three decisions — approve the design, review the PR, and confirm the merge — and everything between runs as a chain of fresh subagents with zero manual handoffs.
 
@@ -112,8 +112,8 @@ flowchart TD
 ### 1. Install
 
 ```bash
-/plugin marketplace add nikhilsitaram/claude-caliper
-/plugin install claude-caliper@claude-caliper
+/plugin marketplace add Tapnetix/tcoder
+/plugin install tcoder@tcoder
 ```
 
 Restart Claude Code.
@@ -132,9 +132,9 @@ Install only what you need:
 
 | Package | What you get | Install command |
 |---------|-------------|-----------------|
-| **claude-caliper** | All 11 skills | `/plugin install claude-caliper@claude-caliper` |
-| **claude-caliper-workflow** | Design-to-merge pipeline (9 skills) | `/plugin install claude-caliper-workflow@claude-caliper` |
-| **claude-caliper-tooling** | Codebase review + skill eval (2 skills) | `/plugin install claude-caliper-tooling@claude-caliper` |
+| **tcoder** | All 11 skills | `/plugin install tcoder@tcoder` |
+| **tcoder-workflow** | Design-to-merge pipeline (9 skills) | `/plugin install tcoder-workflow@tcoder` |
+| **tcoder-tooling** | Codebase review + skill eval (2 skills) | `/plugin install tcoder-tooling@tcoder` |
 
 ### Updating
 
@@ -176,7 +176,7 @@ These skills chain automatically. You trigger the first one by describing what t
 
 When an agent reviews code it just wrote, it rationalizes problems away. It remembers *why* it made every choice, so every choice seems reasonable. This is the same bias code review between humans exists to counter.
 
-claude-caliper spawns a **fresh subagent for every review**:
+tcoder spawns a **fresh subagent for every review**:
 
 - The **task reviewer** never wrote the code it's reviewing
 - The **implementation reviewer** never built any of the tasks it's checking
@@ -190,7 +190,7 @@ No agent ever reviews its own work.
 <details>
 <summary><strong>Spec-Driven + Test-Driven Development</strong></summary>
 
-claude-caliper chains two disciplines that are usually practiced separately: **spec-driven development** (validate *what* to build) and **test-driven development** (validate *that* it works). The design doc defines observable success criteria; the plan maps those criteria to tasks; every task follows RED-GREEN-REFACTOR; the implementation review verifies the criteria are met by the final code.
+tcoder chains two disciplines that are usually practiced separately: **spec-driven development** (validate *what* to build) and **test-driven development** (validate *that* it works). The design doc defines observable success criteria; the plan maps those criteria to tasks; every task follows RED-GREEN-REFACTOR; the implementation review verifies the criteria are met by the final code.
 
 ### The Traceability Chain
 
@@ -271,7 +271,7 @@ Plans aren't freeform text. They're machine-readable artifacts validated by a sc
 ### Directory Layout
 
 ```text
-.claude/claude-caliper/2026-03-21-rate-limiter/
+.claude/tcoder/2026-03-21-rate-limiter/
 ├── design-rate-limiter.md  # Design doc with success criteria
 ├── plan.json               # Machine-readable manifest (source of truth)
 ├── plan.md                 # Auto-rendered from plan.json (never hand-edited)
@@ -491,10 +491,10 @@ Agent teams are a Claude Code feature that lets multiple Claude instances (teamm
 It uses feature branches, worktrees for isolation, and squash merges. It never commits directly to main. All changes go through PRs.
 
 **The design skill isn't firing — Claude just starts coding.**
-Restart Claude Code after installing, then start a **new session**. Existing sessions don't pick up plugin changes. If it still doesn't fire, verify the plugin is loaded: run `/plugin` and check that claude-caliper appears in the list.
+Restart Claude Code after installing, then start a **new session**. Existing sessions don't pick up plugin changes. If it still doesn't fire, verify the plugin is loaded: run `/plugin` and check that tcoder appears in the list.
 
 **How do I update to a newer version?**
-Re-run `/plugin install claude-caliper@claude-caliper`. Claude Code compares your cached version against the declared version and pulls the update. Check the [releases page](https://github.com/nikhilsitaram/claude-caliper/releases) for changelogs.
+Re-run `/plugin install tcoder@tcoder`. Claude Code compares your cached version against the declared version and pulls the update. Check the [releases page](https://github.com/Tapnetix/tcoder/releases) for changelogs.
 
 ---
 
@@ -510,4 +510,4 @@ Re-run `/plugin install claude-caliper@claude-caliper`. Claude Code compares you
 
 ## Author
 
-[Nikhil Sitaram](https://github.com/nikhilsitaram)
+[Tapnetix](https://github.com/Tapnetix)

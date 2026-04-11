@@ -20,12 +20,12 @@ Dispatch a reviewer subagent to validate a design doc before planning. Catches s
 ## Dispatch
 
 Gather inputs:
-- **Design doc** — `.claude/claude-caliper/YYYY-MM-DD-topic/design-topic.md`
+- **Design doc** — `.claude/tcoder/YYYY-MM-DD-topic/design-topic.md`
 - **Repo root** — the worktree the design targets
 
 Dispatch with `model: "$DESIGN_REVIEWER_MODEL"` — review requires strong reasoning to catch blind spots the designer and user converged past.
 
-Use `subagent_type: "claude-caliper:design-reviewer"`. **See:** reviewer-prompt.md for invocation template.
+Use `subagent_type: "tcoder:design-reviewer"`. **See:** reviewer-prompt.md for invocation template.
 
 ## 8-Point Checklist
 
@@ -53,7 +53,7 @@ Reviewer produces:
 - **Delta context (iter ≥2):** Follow-up reviewers receive the prior iteration's issues with resolution status, enabling verify-then-scan instead of full re-discovery
 - **Severity-gated termination (after iter 3):** Remaining `low` and `medium` issues are auto-dismissed; only `high` and `critical` issues block planning past iteration 3
 
-Note: Plan-review uses a separate gate — `caliper-settings get re_review_threshold`. That gate is unchanged.
+Note: Plan-review uses a separate gate — `tcoder-settings get re_review_threshold`. That gate is unchanged.
 
 ## Integration
 

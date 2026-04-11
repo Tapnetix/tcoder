@@ -8,7 +8,7 @@ cwd=$(echo "$input" | jq -r '.cwd // empty')
 [[ -n "$cwd" ]] || exit 0
 
 file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty')
-if [[ -n "$file_path" && "$file_path" == *"/.claude/claude-caliper/"* ]]; then
+if [[ -n "$file_path" && "$file_path" == *"/.claude/tcoder/"* ]]; then
   cat << 'HOOKJSON'
 {
   "hookSpecificOutput": {
@@ -26,13 +26,13 @@ if [[ -n "$git_common_dir" && "$git_common_dir" != /* ]]; then
 fi
 MAIN_ROOT="${git_common_dir%/.git}"
 
-find_args=("$cwd/.claude/claude-caliper")
-for d in "$cwd/.claude/worktrees"/*/.claude/claude-caliper; do
+find_args=("$cwd/.claude/tcoder")
+for d in "$cwd/.claude/worktrees"/*/.claude/tcoder; do
   [[ -e "$d" ]] && find_args+=("$d")
 done
 if [[ -n "$MAIN_ROOT" && "$MAIN_ROOT" != "$cwd" ]]; then
-  find_args+=("$MAIN_ROOT/.claude/claude-caliper")
-  for d in "$MAIN_ROOT/.claude/worktrees"/*/.claude/claude-caliper; do
+  find_args+=("$MAIN_ROOT/.claude/tcoder")
+  for d in "$MAIN_ROOT/.claude/worktrees"/*/.claude/tcoder; do
     [[ -e "$d" ]] && find_args+=("$d")
   done
 fi

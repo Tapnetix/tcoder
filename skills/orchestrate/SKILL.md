@@ -13,9 +13,9 @@ Execute plans via the configured execution mode. Phases run sequentially; task d
 
 | Template | Purpose |
 |----------|---------|
-| `./implementer-prompt.md` | Invocation template for `claude-caliper:task-implementer` |
-| `./task-reviewer-prompt.md` | Invocation template for `claude-caliper:task-reviewer` |
-| `skills/implementation-review/reviewer-prompt.md` | Invocation template for `claude-caliper:implementation-reviewer` |
+| `./implementer-prompt.md` | Invocation template for `tcoder:task-implementer` |
+| `./task-reviewer-prompt.md` | Invocation template for `tcoder:task-reviewer` |
+| `skills/implementation-review/reviewer-prompt.md` | Invocation template for `tcoder:implementation-reviewer` |
 | `./dispatch-subagents.md` | Subagents dispatch protocol |
 | `./dispatch-agent-teams.md` | Agent teams dispatch protocol |
 
@@ -27,13 +27,13 @@ TaskCreate per phase: "Execute tasks ({N})", "Implementation review", "Create PR
 
 Before first phase:
 - Resolve absolute path: `PLAN_JSON=$(realpath plan.json)` and `PLAN_DIR=$(dirname "$PLAN_JSON")`
-  Plan artifacts live under `.claude/claude-caliper/` (gitignored). Phase worktrees won't have these files, so all plan.json references must use the absolute `$PLAN_JSON` path — it points to the integration worktree where the plan was created.
+  Plan artifacts live under `.claude/tcoder/` (gitignored). Phase worktrees won't have these files, so all plan.json references must use the absolute `$PLAN_JSON` path — it points to the integration worktree where the plan was created.
 - Read workflow: `WORKFLOW=$(jq -r '.workflow' "$PLAN_JSON")`
 - Read execution mode: `EXEC_MODE=$(jq -r '.execution_mode' "$PLAN_JSON")`
-Note: `workflow` and `execution_mode` are read from plan.json (set by the design skill based on user selection and caliper-settings defaults), not from caliper-settings at runtime. This avoids two sources of truth — the plan is the single source once created.
-- Read task implementer model: `TASK_IMPLEMENTER_MODEL=$(caliper-settings get task_implementer_model)`
-- Read task reviewer model: `TASK_REVIEWER_MODEL=$(caliper-settings get task_reviewer_model)`
-- Read implementation reviewer model: `IMPL_REVIEWER_MODEL=$(caliper-settings get implementation_reviewer_model)`
+Note: `workflow` and `execution_mode` are read from plan.json (set by the design skill based on user selection and tcoder-settings defaults), not from tcoder-settings at runtime. This avoids two sources of truth — the plan is the single source once created.
+- Read task implementer model: `TASK_IMPLEMENTER_MODEL=$(tcoder-settings get task_implementer_model)`
+- Read task reviewer model: `TASK_REVIEWER_MODEL=$(tcoder-settings get task_reviewer_model)`
+- Read implementation reviewer model: `IMPL_REVIEWER_MODEL=$(tcoder-settings get implementation_reviewer_model)`
 Note: These model settings are substituted into dispatch template variables `{TASK_IMPLEMENTER_MODEL}`, `{TASK_REVIEWER_MODEL}`, and `{IMPL_REVIEWER_MODEL}` when dispatching implementers, reviewers, and fix-cycle agents.
 - Count phases: `PHASE_COUNT=$(jq '.phases | length' "$PLAN_JSON")`
 - Validate schema: `validate-plan --schema "$PLAN_JSON"`
@@ -81,7 +81,7 @@ After all tasks complete and branches merged:
 
 ## Review Loop Protocol
 
-Read the re-review threshold: `RE_REVIEW_THRESHOLD=$(caliper-settings get re_review_threshold)` (default: 5).
+Read the re-review threshold: `RE_REVIEW_THRESHOLD=$(tcoder-settings get re_review_threshold)` (default: 5).
 
 After each impl-review dispatch:
 
@@ -105,7 +105,7 @@ Skip integration branch and phase worktrees. Work directly in the feature worktr
 5. `validate-plan --update-status "$PLAN_JSON" --plan --status Complete`
 6. Route on workflow:
    - `"pr-create"`: invoke pr-create (targets main), `validate-plan --check-workflow "$PLAN_JSON"`, stop
-   - `"pr-merge"`: invoke pr-create, read `REVIEW_WAIT=$(caliper-settings get review_wait_minutes)`, poll checks + pr-review --automated (skip if $REVIEW_WAIT is 0; if skipped, invoke pr-merge directly), `validate-plan --check-workflow "$PLAN_JSON"`
+   - `"pr-merge"`: invoke pr-create, read `REVIEW_WAIT=$(tcoder-settings get review_wait_minutes)`, poll checks + pr-review --automated (skip if $REVIEW_WAIT is 0; if skipped, invoke pr-merge directly), `validate-plan --check-workflow "$PLAN_JSON"`
 
 ## After All Phases (Multi-Phase Only)
 

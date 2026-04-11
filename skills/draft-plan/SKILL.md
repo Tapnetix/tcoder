@@ -3,13 +3,13 @@ name: draft-plan
 description: Use when you have a spec or requirements for a multi-step task, before touching code
 ---
 
-> **Subagent dispatch:** Use `subagent_type: "claude-caliper:plan-drafter"`. The agent definition contains the full planning methodology. The invocation prompt needs only the design doc path, working directory, and plan directory.
+> **Subagent dispatch:** Use `subagent_type: "tcoder:plan-drafter"`. The agent definition contains the full planning methodology. The invocation prompt needs only the design doc path, working directory, and plan directory.
 
 # Writing Plans
 
 Write implementation plans assuming the executor has zero codebase context. Document everything: which files to touch, exact code, how to test, what to avoid and why.
 
-**Save to:** `.claude/claude-caliper/YYYY-MM-DD-<topic>/` directory
+**Save to:** `.claude/tcoder/YYYY-MM-DD-<topic>/` directory
 
 ## Workflow
 
@@ -22,7 +22,7 @@ Write implementation plans assuming the executor has zero codebase context. Docu
 7. **Create completion.md stubs** — Empty files, one per phase
 8. **Run validate-plan --schema** — Fix any structural errors
 9. **Run validate-plan --render** — Generates plan.md deterministically
-10. **Skip** — plan artifacts are under `.claude/claude-caliper/` (gitignored), no commit needed
+10. **Skip** — plan artifacts are under `.claude/tcoder/` (gitignored), no commit needed
 11. **Hand off** — Report plan path to caller. Plan-review is dispatched by the design skill after draft-plan returns.
 
 ## Plan Structure
@@ -30,7 +30,7 @@ Write implementation plans assuming the executor has zero codebase context. Docu
 **Directory layout:**
 
 ```text
-.claude/claude-caliper/YYYY-MM-DD-topic/
+.claude/tcoder/YYYY-MM-DD-topic/
 ├── plan.json             # Structured manifest (source of truth)
 ├── plan.md               # Generated outline (DO NOT edit)
 ├── phase-a/

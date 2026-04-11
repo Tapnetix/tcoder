@@ -26,13 +26,13 @@ Two-stage review:
 **Stage 2: Prose + design review** — If schema passes, dispatch reviewer subagent.
 
 Gather inputs:
-- **Plan directory** — `.claude/claude-caliper/YYYY-MM-DD-topic/` (containing plan.json + task .md files)
+- **Plan directory** — `.claude/tcoder/YYYY-MM-DD-topic/` (containing plan.json + task .md files)
 - **Design doc** — if one exists (or "None")
 - **Repo root** — the worktree the plan targets
 
 Dispatch with `model: "$PLAN_REVIEWER_MODEL"` — consistency checking requires strong reasoning.
 
-Use `subagent_type: "claude-caliper:plan-reviewer"`. The agent's static behavior (7-point checklist, output format) is in the agent definition. The invocation prompt contains only the plan dir, design doc path, and codebase root.
+Use `subagent_type: "tcoder:plan-reviewer"`. The agent's static behavior (7-point checklist, output format) is in the agent definition. The invocation prompt contains only the plan dir, design doc path, and codebase root.
 
 **See:** reviewer-prompt.md
 
@@ -91,7 +91,7 @@ Reviewer produces:
 **Pass:** Zero issues, or all issues fixed and confirmed clean
 **Fail:** Return to draft-plan to fix, then re-run plan-review
 
-**Re-review gate:** Read the threshold: `caliper-settings get re_review_threshold` (default: 5). If the reviewer finds more issues than this threshold, after all fixes, dispatch a fresh reviewer with the same full scope to confirm clean. At or under the threshold, verify fixes and proceed.
+**Re-review gate:** Read the threshold: `tcoder-settings get re_review_threshold` (default: 5). If the reviewer finds more issues than this threshold, after all fixes, dispatch a fresh reviewer with the same full scope to confirm clean. At or under the threshold, verify fixes and proceed.
 
 ## Integration
 

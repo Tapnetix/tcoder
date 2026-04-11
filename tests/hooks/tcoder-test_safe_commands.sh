@@ -250,24 +250,24 @@ echo "Test 20: Non-matching built-in tools pass through (no output)"
 OUT20=$(run_allow_tool "Edit")
 assert_output_empty "Edit not auto-approved" "$OUT20"
 
-echo "Test 20a: Bash commands targeting .claude/claude-caliper/ auto-allowed"
+echo "Test 20a: Bash commands targeting .claude/tcoder/ auto-allowed"
 SAFE20A="$TMPDIR_TEST/safe20a.txt"
 printf 'git\n' > "$SAFE20A"
-OUT20A=$(run_allow "rm -rf /Users/me/project/.claude/claude-caliper/design-doc.md" "$SAFE20A")
-assert_output_contains "rm in .claude/claude-caliper/ auto-allowed" "$OUT20A" '"behavior":"allow"'
+OUT20A=$(run_allow "rm -rf /Users/me/project/.claude/tcoder/design-doc.md" "$SAFE20A")
+assert_output_contains "rm in .claude/tcoder/ auto-allowed" "$OUT20A" '"behavior":"allow"'
 
-echo "Test 20b: Bash commands outside .claude/claude-caliper/ not auto-allowed by path check"
+echo "Test 20b: Bash commands outside .claude/tcoder/ not auto-allowed by path check"
 SAFE20B="$TMPDIR_TEST/safe20b.txt"
 LOG20B="$TMPDIR_TEST/log20b.txt"
 printf 'git\n' > "$SAFE20B"
 OUT20B=$(run_allow "rm -rf /Users/me/project/src/important.py" "$SAFE20B" "$LOG20B")
-assert_output_empty "rm outside caliper dir not auto-allowed" "$OUT20B"
+assert_output_empty "rm outside tcoder dir not auto-allowed" "$OUT20B"
 
-echo "Test 20c: Injection via caliper path in non-target segment blocked"
+echo "Test 20c: Injection via tcoder path in non-target segment blocked"
 SAFE20C="$TMPDIR_TEST/safe20c.txt"
 printf 'git\n' > "$SAFE20C"
-OUT20C=$(run_allow "rm -rf /important; echo /.claude/claude-caliper/trick" "$SAFE20C")
-assert_output_empty "injection with caliper path in second segment blocked" "$OUT20C"
+OUT20C=$(run_allow "rm -rf /important; echo /.claude/tcoder/trick" "$SAFE20C")
+assert_output_empty "injection with tcoder path in second segment blocked" "$OUT20C"
 
 echo "Test 21: Hash comments in commands are skipped"
 SAFE21="$TMPDIR_TEST/safe21.txt"
@@ -287,16 +287,16 @@ done
 
 echo "Test 40: Prefix glob matching with trailing *"
 SAFE40="$TMPDIR_TEST/safe40.txt"
-printf 'caliper-test_*\ngit\n' > "$SAFE40"
-OUT40=$(run_allow "./tests/validate-plan/caliper-test_schema.sh" "$SAFE40")
-assert_output_contains "prefix glob caliper-test_* matches" "$OUT40" '"behavior":"allow"'
+printf 'tcoder-test_*\ngit\n' > "$SAFE40"
+OUT40=$(run_allow "./tests/validate-plan/tcoder-test_schema.sh" "$SAFE40")
+assert_output_contains "prefix glob tcoder-test_* matches" "$OUT40" '"behavior":"allow"'
 
 echo "Test 41: Prefix glob does not match non-prefixed command"
 SAFE41="$TMPDIR_TEST/safe41.txt"
 LOG41="$TMPDIR_TEST/log41.txt"
-printf 'caliper-test_*\n' > "$SAFE41"
+printf 'tcoder-test_*\n' > "$SAFE41"
 OUT41=$(run_allow "test_schema.sh" "$SAFE41" "$LOG41")
-assert_output_empty "prefix glob caliper-test_* does not match test_schema.sh" "$OUT41"
+assert_output_empty "prefix glob tcoder-test_* does not match test_schema.sh" "$OUT41"
 assert_file_contains "non-matching command logged" "$LOG41" "test_schema.sh"
 
 echo "Test 42-45: Various safe command patterns"
@@ -306,8 +306,8 @@ OUT42=$(run_allow "./bin/validate-plan --schema plan.json" "$SAFE42")
 assert_output_contains "exact match without glob works" "$OUT42" '"behavior":"allow"'
 
 SAFE44="$TMPDIR_TEST/safe44.txt"
-printf 'caliper-settings\n' > "$SAFE44"
-OUT44=$(run_allow '"/path/to/plugin/bin/caliper-settings" get merge_strategy' "$SAFE44")
+printf 'tcoder-settings\n' > "$SAFE44"
+OUT44=$(run_allow '"/path/to/plugin/bin/tcoder-settings" get merge_strategy' "$SAFE44")
 assert_output_contains "quoted absolute path allowed" "$OUT44" '"behavior":"allow"'
 
 echo "Test 46: Quoted variable assignment VAR=\"\$(cmd)\" extracts subshell cmd"
@@ -403,8 +403,8 @@ echo "Test 32: sh bin/validate-plan denied"
 OUT32=$(run_deny "sh bin/validate-plan --schema plan.json")
 assert_output_contains_deny_with_reason "sh + script denied" "$OUT32" "Do not use"
 
-echo "Test 33: bash tests/hooks/caliper-test_safe_commands.sh denied"
-OUT33=$(run_deny "bash tests/hooks/caliper-test_safe_commands.sh")
+echo "Test 33: bash tests/hooks/tcoder-test_safe_commands.sh denied"
+OUT33=$(run_deny "bash tests/hooks/tcoder-test_safe_commands.sh")
 assert_output_contains_deny_with_reason "bash + test script denied" "$OUT33" "Do not use"
 
 echo "Test 34: \$VAR as command word triggers deny"

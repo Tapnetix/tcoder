@@ -1,6 +1,6 @@
 # Implementation Reviewer Invocation Template
 
-Use this template when dispatching an implementation-reviewer agent. The agent's static behavior (8-category cross-task checklist, integration test coverage, output format, review-summary format) is defined in the `claude-caliper:implementation-reviewer` agent definition. This template provides only the dynamic per-invocation context.
+Use this template when dispatching an implementation-reviewer agent. The agent's static behavior (8-category cross-task checklist, integration test coverage, output format, review-summary format) is defined in the `tcoder:implementation-reviewer` agent definition. This template provides only the dynamic per-invocation context.
 
 ## Variables
 
@@ -13,13 +13,13 @@ Use this template when dispatching an implementation-reviewer agent. The agent's
 - `{PHASE_DIR}` — path to current phase directory
 - `{PHASE_CONTEXT}` — phase letter/name and downstream expectations (empty for final/single-phase)
 - `{DESIGN_DOC_PATH}` — path to design doc (or "None")
-- `{IMPL_REVIEWER_MODEL}` — model for the reviewer agent (from caliper-settings)
+- `{IMPL_REVIEWER_MODEL}` — model for the reviewer agent (from tcoder-settings)
 
 ## Dispatch Example
 
 ```text
 Agent(
-  subagent_type: "claude-caliper:implementation-reviewer",
+  subagent_type: "tcoder:implementation-reviewer",
   model: "{IMPL_REVIEWER_MODEL}",
   prompt: "Review the complete feature implementation.
 

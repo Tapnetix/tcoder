@@ -29,16 +29,16 @@ extract_segments "$cmd"
 segments=("${SEGMENTS[@]+"${SEGMENTS[@]}"}")
 
 if [[ ${#segments[@]} -gt 0 ]]; then
-  caliper_only=true
+  tcoder_only=true
   for _seg in "${segments[@]}"; do
     _seg="${_seg#"${_seg%%[![:space:]]*}"}"
     [[ -z "$_seg" ]] && continue
-    if [[ "$_seg" != *"/.claude/claude-caliper/"* ]]; then
-      caliper_only=false
+    if [[ "$_seg" != *"/.claude/tcoder/"* ]]; then
+      tcoder_only=false
       break
     fi
   done
-  if [[ "$caliper_only" == "true" ]]; then
+  if [[ "$tcoder_only" == "true" ]]; then
     printf '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}\n'
     exit 0
   fi

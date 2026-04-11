@@ -36,8 +36,8 @@ test
 touch
 uv
 uvx
-caliper-test_*
-caliper-settings
+tcoder-test_*
+tcoder-settings
 validate-plan
 wc
 which

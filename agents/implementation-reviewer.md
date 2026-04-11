@@ -5,7 +5,7 @@ model: inherit
 tools: [Read, Grep, Glob, Bash]
 memory: project
 maxTurns: 30
-effort: medium
+effort: high
 background: true
 ---
 
@@ -29,9 +29,11 @@ Hunt for issues that span task boundaries:
 
 6. **Integration gaps** -- config flags never checked, return values never used, interfaces not implemented where needed
 
-7. **Inadequate integration test coverage** -- missing broad acceptance tests (Level 1), missing boundary tests at cross-task seams (Level 2), tests that mock away the boundaries they should verify
+7. **Inadequate unit test coverage** -- Every piece of code should be covered with tests. We strive to keep tests code coverage as close to 100% as possible
 
-8. **Success Criteria Fulfillment** (skip if design doc is "None")
+8. **Inadequate integration test coverage** -- missing broad acceptance tests (Level 1), missing boundary tests at cross-task seams (Level 2), tests that mock away the boundaries they should verify
+
+9. **Success Criteria Fulfillment** (skip if design doc is "None")
    Read the Goal and Success Criteria sections from the design doc.
    For each criterion: does the implementation deliver this outcome?
 

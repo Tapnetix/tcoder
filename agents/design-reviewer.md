@@ -5,7 +5,7 @@ model: inherit
 tools: [Read, Grep, Glob, Bash]
 memory: project
 maxTurns: 30
-effort: medium
+effort: high
 background: true
 ---
 

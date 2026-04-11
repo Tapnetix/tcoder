@@ -1,4 +1,4 @@
-# Superpowers — Project Instructions
+# tCoder — Project Instructions
 
 ## What This Repo Is
 
@@ -44,7 +44,7 @@ docs/reviews/     — Codebase review reports
 .claude-plugin/   — Plugin manifest and marketplace config
 ```
 
-Plan artifacts (design docs, plan.json, task briefs) are created by the design/draft-plan skills under `.claude/claude-caliper/` and gitignored — they're transient working state, not permanent repo content.
+Plan artifacts (design docs, plan.json, task briefs) are created by the design/draft-plan skills under `.claude/tcoder/` and gitignored — they're transient working state, not permanent repo content.
 
 ## Testing
 
@@ -66,7 +66,7 @@ Orchestrate supports two execution modes: subagents (parallel Agent tool dispatc
 
 ## Git
 
-- Use `nikhil5890@gmail.com` for commits (personal repo)
-- Feature branches, squash merge, delete branch after merge
+- Use `yuri.yudin@gmail.com` for commits
+- Feature branches, merge, delete branch after merge
 - Bump `version` in `.claude-plugin/marketplace.json` in any PR that changes skill behavior — the plugin installer compares cached vs declared version, so without a bump users stay on stale cache
 - After merging a PR that bumps the version, create a GitHub release (`gh release create vX.Y.Z --generate-notes`) so users can track changes
