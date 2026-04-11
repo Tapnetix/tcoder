@@ -21,6 +21,11 @@ jobs:
           bash tests/hooks/tcoder-test_safe_commands.sh
           bash tests/hooks/tcoder-test_permission_request.sh
 
+      - name: Coverage tests
+        run: |
+          bash tests/coverage/tcoder-test_coverage_settings.sh
+          bash tests/coverage/tcoder-test_coverage_pipeline.sh
+
       - name: Validate-plan tests
         run: |
           bash tests/validate-plan/tcoder-test_schema.sh
