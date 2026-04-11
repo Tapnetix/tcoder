@@ -49,6 +49,8 @@ Removes a user override so the setting falls back to its shipped default. With n
 | `pr_reviewer_model` | enum | `opus` | pr-review |
 | `review_wait_minutes` | int | `5` | orchestrate, pr-review |
 | `re_review_threshold` | int | `5` | design, orchestrate, review skills |
+| `coverage_mode` | enum | `enforce` | design, orchestrate, plan-review, task-reviewer, implementation-review |
+| `coverage_threshold` | int | `90` | orchestrate, task-reviewer, implementation-review |
 
 ## How Settings Are Used
 

@@ -82,6 +82,13 @@ Write implementation plans assuming the executor has zero codebase context. Docu
 
 Optional: `success_criteria` at plan/phase/task levels. `workflow`: `pr-create` (default), `pr-merge`, or `plan-only` — set by design skill. `execution_mode`: `subagents` (default placeholder) or `agent-teams` — design skill overwrites after draft-plan. `review_wait_minutes`: max wait for external reviewers (default 5, 0 to skip).
 
+**Coverage:** If the design doc includes a **Test Coverage** section (present when `coverage_mode` != `off`), populate the `coverage` object in plan.json:
+- `command`: the coverage command from the design doc (e.g., `npx jest --coverage --coverageReporters=text`)
+- `threshold`: the threshold percentage from the design doc (from `coverage_threshold` setting)
+- `baseline`: the baseline percentage from the design doc, or `null` if no tooling existed
+
+If baseline is `null` (no coverage tooling), make the first task in the first phase a coverage-setup task: configure the project's test framework for coverage reporting, run the command, and verify it produces output. Subsequent tasks include a coverage verification step after the TDD green phase: run the coverage command scoped to the task's touched files and verify coverage meets the threshold.
+
 **See:** `schema-reference.md` for full schema reference.
 
 **Task .md file structure:**

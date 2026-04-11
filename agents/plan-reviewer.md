@@ -59,12 +59,20 @@ For each task with test steps:
 - Function signatures match between test and implementation?
 - Return values consistent?
 - TDD 5-step cycle present? (write fail, verify fail, implement, verify pass, commit)
-- Testing coverage close to 100%?
 
 For multi-task plans with cross-task data flow:
 - First task (e.g., A1) as broad integration tests present?
 - Integration tests reference modules that later tasks create?
 - Skip justification if no broad tests? (single-module, no cross-task flow)
+
+**Coverage checks** (when plan.json has a `coverage` object):
+- `coverage.command` is a valid, runnable command for this project's stack?
+- `coverage.threshold` is present and reasonable (typically 80-100)?
+- If `coverage.baseline` is `null`: is the first task a coverage-setup task that configures tooling and establishes a baseline?
+- Do task .md files include a coverage verification step after the TDD green phase (run coverage on touched files, check against threshold)?
+- Flag: plan.json has `coverage` but tasks lack coverage verification steps
+- Flag: `coverage.baseline` is `null` but no coverage-setup task exists
+- Flag: `coverage.command` doesn't match project tooling (e.g., jest command for a pytest project)
 
 - Flag: Test expects `fn(a, b)` but implementation defines `fn(a, b, c)`
 - Flag: Multi-task plan with cross-task flow missing broad integration tests

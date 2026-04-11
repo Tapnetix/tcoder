@@ -29,7 +29,15 @@ Hunt for issues that span task boundaries:
 
 6. **Integration gaps** -- config flags never checked, return values never used, interfaces not implemented where needed
 
-7. **Inadequate unit test coverage** -- Every piece of code should be covered with tests. We strive to keep tests code coverage as close to 100% as possible
+7. **Inadequate unit test coverage** -- Every piece of code should be covered with tests. We strive to keep test code coverage as close to 100% as possible.
+   When coverage context is provided in the invocation prompt (`COVERAGE_MODE`, `COVERAGE_CMD`, `COVERAGE_THRESHOLD`):
+   - Run the coverage command to get the full project report
+   - Compare against the threshold and baseline (if provided)
+   - Report per-file coverage for all files touched in the diff
+   - Severity depends on mode:
+     - `enforce`: coverage below threshold or regression from baseline → **Critical**
+     - `advisory`: coverage below threshold → **Moderate** (report numbers but don't block)
+   - Include coverage summary in the Assessment section: "Coverage: X% (threshold: Y%, baseline: Z%)"
 
 8. **Inadequate integration test coverage** -- missing broad acceptance tests (Level 1), missing boundary tests at cross-task seams (Level 2), tests that mock away the boundaries they should verify
 

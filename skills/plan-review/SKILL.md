@@ -72,7 +72,7 @@ Handled by `validate-plan --schema`:
 1. **Dependency Ordering** — *(schema validates graph; LLM checks semantic coherence)*
 2. **Artifact Consistency** — Same file/function/variable referenced with same name everywhere *(LLM focus)*
 3. **Design Doc Alignment** — Scope, architecture, tech stack match design (skip if no design doc) *(LLM focus)*
-4. **Test-Implementation Coherence** — TDD structure intact, Task 0 present (or justified skip), signatures match *(LLM focus)*
+4. **Test-Implementation Coherence** — TDD structure intact, Task 0 present (or justified skip), signatures match, coverage config and verification steps present when plan.json has `coverage` object *(LLM focus)*
 5. **Completeness** — *(schema validates field presence; LLM checks prose quality)*
 6. **Different Claude Test** — Each task executable by fresh Claude with zero context *(LLM focus)*
 7. **Success Criteria Coverage** — Every criterion in the design doc maps to at least one task's "done when" field (skip if no design doc) *(LLM focus)*

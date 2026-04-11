@@ -99,5 +99,18 @@
     "default": "opus",
     "description": "Model for PR review",
     "used_by": ["pr-review"]
+  },
+  "coverage_mode": {
+    "type": "enum",
+    "values": ["off", "advisory", "enforce"],
+    "default": "enforce",
+    "description": "Test coverage enforcement level: off (skip), advisory (report only), enforce (gate on threshold)",
+    "used_by": ["design", "orchestrate", "plan-review", "task-reviewer", "implementation-review"]
+  },
+  "coverage_threshold": {
+    "type": "int",
+    "default": 90,
+    "description": "Minimum test coverage percentage for touched files (0-100, used in advisory/enforce modes)",
+    "used_by": ["orchestrate", "task-reviewer", "implementation-review"]
   }
 }

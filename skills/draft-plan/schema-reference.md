@@ -37,6 +37,11 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
   "goal": "One sentence",
   "architecture": "2-3 sentences",
   "tech_stack": "Key technologies",
+  "coverage": {
+    "command": "npx jest --coverage --coverageReporters=text",
+    "threshold": 90,
+    "baseline": null
+  },
   "success_criteria": [
     {
       "run": "npm test",
@@ -88,6 +93,10 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
 
 - `schema` (integer, required): Schema version for forward compatibility.
 - `status` (string, required): `Not Yet Started` | `In Development` | `Complete`.
+- `coverage` (object, optional): Present when `coverage_mode` setting is not `off`. Captures the project's test coverage configuration so implementers and reviewers can measure coverage consistently.
+  - `command` (string, required): Shell command that produces a text coverage report (e.g., `npx jest --coverage --coverageReporters=text`).
+  - `threshold` (integer, required): Minimum coverage percentage for touched files (from `coverage_threshold` setting).
+  - `baseline` (integer or null, required): Project-wide coverage percentage measured before implementation begins. `null` if the project had no coverage tooling and a setup task will establish it.
 - `success_criteria` (array, optional): Plan-level criteria. Fields stay in the schema for forward compatibility but are not programmatically enforced yet (see Deferred: Success Criteria Runner).
   - `run` (string, required): Shell command to execute. Must be non-empty.
   - `expect_exit` (integer, optional): Expected exit code.

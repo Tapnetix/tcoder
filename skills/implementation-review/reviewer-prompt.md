@@ -14,6 +14,10 @@ Use this template when dispatching an implementation-reviewer agent. The agent's
 - `{PHASE_CONTEXT}` — phase letter/name and downstream expectations (empty for final/single-phase)
 - `{DESIGN_DOC_PATH}` — path to design doc (or "None")
 - `{IMPL_REVIEWER_MODEL}` — model for the reviewer agent (from tcoder-settings)
+- `{COVERAGE_MODE}` — `off`, `advisory`, or `enforce` (from tcoder-settings). Omit the Coverage section below when `off` or when plan.json has no `coverage` object.
+- `{COVERAGE_CMD}` — shell command to run coverage (from plan.json `coverage.command`)
+- `{COVERAGE_THRESHOLD}` — minimum coverage percentage (from tcoder-settings)
+- `{COVERAGE_BASELINE}` — baseline coverage percentage before implementation (from plan.json `coverage.baseline`, or "null")
 
 ## Dispatch Example
 
@@ -53,6 +57,13 @@ Agent(
     ## Plan Context
 
     Read {PLAN_DIR}/plan.json for task metadata.
-    Read {PHASE_DIR}/completion.md for completion summary and deviations."
+    Read {PHASE_DIR}/completion.md for completion summary and deviations.
+
+    ## Coverage  <!-- include this section only when COVERAGE_MODE is not 'off' and COVERAGE_CMD is set -->
+
+    Coverage mode: {COVERAGE_MODE} | Threshold: {COVERAGE_THRESHOLD}% | Baseline: {COVERAGE_BASELINE}%
+    Coverage command: {COVERAGE_CMD}
+    Run full coverage and report per-file numbers for all files in the diff.
+    Compare against threshold and baseline to detect regressions."
 )
 ```

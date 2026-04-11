@@ -35,6 +35,7 @@ Note: `workflow` and `execution_mode` are read from plan.json (set by the design
 - Read task reviewer model: `TASK_REVIEWER_MODEL=$(tcoder-settings get task_reviewer_model)`
 - Read implementation reviewer model: `IMPL_REVIEWER_MODEL=$(tcoder-settings get implementation_reviewer_model)`
 Note: These model settings are substituted into dispatch template variables `{TASK_IMPLEMENTER_MODEL}`, `{TASK_REVIEWER_MODEL}`, and `{IMPL_REVIEWER_MODEL}` when dispatching implementers, reviewers, and fix-cycle agents.
+- Read coverage config: `COVERAGE_MODE=$(tcoder-settings get coverage_mode)` and `COVERAGE_THRESHOLD=$(tcoder-settings get coverage_threshold)`. Also read from plan.json: `COVERAGE_CMD=$(jq -r '.coverage.command // empty' "$PLAN_JSON")`. If `COVERAGE_MODE` is not `off` and `COVERAGE_CMD` is non-empty, pass `{COVERAGE_MODE}`, `{COVERAGE_THRESHOLD}`, and `{COVERAGE_CMD}` to implementer and reviewer prompts.
 - Count phases: `PHASE_COUNT=$(jq '.phases | length' "$PLAN_JSON")`
 - Validate schema: `validate-plan --schema "$PLAN_JSON"`
 - Validate entry gate: `validate-plan --check-entry "$PLAN_JSON" --stage execution`
@@ -75,9 +76,10 @@ After all tasks complete and branches merged:
 1. Dispatch implementation-review with `PHASE_BASE_SHA..HEAD` using `model: "$IMPL_REVIEWER_MODEL"`, run Review Loop Protocol (scope: `phase-{letter_lower}`)
 2. `validate-plan --check-review "$PLAN_JSON" --type impl-review --scope phase-{letter_lower}`
 3. Append review changes to `${PHASE_DIR}/completion.md`
-4. Run phase criteria: `validate-plan --criteria "$PLAN_JSON" --phase {LETTER}`
-5. Update status: `validate-plan --update-status "$PLAN_JSON" --phase {LETTER} --status "Complete (YYYY-MM-DD)"`
-6. (Multi-phase) Create phase PR, external review gate, merge, clean up worktree
+4. **Coverage gate** (when `COVERAGE_MODE` is `enforce` and `COVERAGE_CMD` is set): Run the coverage command and verify the result meets `COVERAGE_THRESHOLD`. If coverage has regressed below the threshold, dispatch an implementer to add missing tests before proceeding. Log coverage percentage in `${PHASE_DIR}/completion.md`.
+5. Run phase criteria: `validate-plan --criteria "$PLAN_JSON" --phase {LETTER}`
+6. Update status: `validate-plan --update-status "$PLAN_JSON" --phase {LETTER} --status "Complete (YYYY-MM-DD)"`
+7. (Multi-phase) Create phase PR, external review gate, merge, clean up worktree
 
 ## Review Loop Protocol
 

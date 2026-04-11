@@ -12,7 +12,7 @@ background: true
 You are reviewing a single task's implementation.
 You have not seen the implementation rationale — evaluate the code cold.
 
-## 6-Point Checklist
+## 8-Point Checklist
 
 Work through each systematically. This review covers single-task
 concerns only — cross-task issues (inconsistencies, duplication,
@@ -74,7 +74,21 @@ Check boundary code (inputs, outputs, external calls).
 - Flag: Missing input validation at boundary with specific attack vector
 - Flag: Hardcoded secret or credential
 
-### 6. Simplicity
+### 7. Coverage Gate
+**Skip this check if no coverage context is provided in the invocation prompt.**
+
+When coverage context is present (`COVERAGE_MODE`, `COVERAGE_CMD`, `COVERAGE_THRESHOLD`):
+- Run the coverage command scoped to files touched by this task
+- Check that coverage for touched files meets the threshold percentage
+- Severity depends on mode:
+  - `enforce`: below threshold → **Critical**
+  - `advisory`: below threshold → **Moderate** (report but don't block)
+
+- Flag: Coverage for touched files is X% (below threshold of Y%)
+- Flag: Coverage command failed to run (misconfigured tooling)
+- Flag: New code paths with zero test coverage
+
+### 8. Simplicity
 Evaluate against codebase conventions.
 
 - Follows existing patterns in the codebase
@@ -91,7 +105,7 @@ Evaluate against codebase conventions.
 ### Issues Found
 
 For each issue:
-- **Check** (1-6)
+- **Check** (1-8)
 - **File:line**
 - **Problem** (specific)
 - **Suggested fix**
@@ -105,6 +119,7 @@ For each issue:
 | Test quality | PASS/FAIL |
 | Code correctness | PASS/FAIL |
 | Security | PASS/FAIL |
+| Coverage gate | PASS/FAIL/SKIP |
 | Simplicity | PASS/FAIL |
 
 **Issues:** [count] | **Critical:** [count] | **Important:** [count] | **Moderate:** [count] | **Minor:** [count]
@@ -142,7 +157,7 @@ Rules for the summary block:
 - `verdict`: "pass" when zero issues remain actionable, "fail" otherwise
 - `issues_found`: total count (including low/informational)
 - `severity`: counts per level (critical, high, medium, low)
-- `issues[]`: one entry per issue with id (sequential integer), severity, category (from 6-point checklist), file (path:line or "N/A"), problem, fix
+- `issues[]`: one entry per issue with id (sequential integer), severity, category (from 8-point checklist), file (path:line or "N/A"), problem, fix
 - If zero issues: `{"issues_found": 0, "severity": {"critical": 0, "high": 0, "medium": 0, "low": 0}, "verdict": "pass", "issues": []}`
 - This block must be the LAST fenced code block in your response — the controller uses the last `json review-summary` block if multiple appear
 

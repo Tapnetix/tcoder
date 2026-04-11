@@ -19,7 +19,7 @@ A todo list, a utility function, a config change — all go through this process
 
 Complete in order:
 
-1. **Explore context** — files, docs, recent commits
+1. **Explore context** — files, docs, recent commits. Also run `COVERAGE_MODE=$(tcoder-settings get coverage_mode)`. If not `off`: detect whether the project has test coverage tooling configured (look for jest coverage config, pytest-cov/coverage.py, go test -cover, nyc/c8, etc.). Note findings: coverage command, current baseline percentage (run it if tooling exists), or "no coverage tooling — setup task needed". This feeds into the design doc and plan.
 2. **Challenge assumptions** — question the framing before accepting it
 3. **Ask clarifying questions** — smart batches (see below)
 4. **Propose 2-3 approaches** — trade-offs and your recommendation
@@ -202,4 +202,5 @@ When writing the design doc (`.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.m
 - Sections in order: Problem, Goal, Success Criteria, Architecture, Key Decisions, Non-Goals, Implementation Approach
 - **Problem** — what's broken, who's affected, consequences of not solving
 - **Success Criteria** — human-verifiable behavioral statements (not "tests pass"); collectively complete (all pass = goal met), individually necessary
+- **Test Coverage** (when `coverage_mode` != `off`) — coverage tool detected or "none (needs setup)", coverage command, baseline percentage or `null`, threshold from `coverage_threshold` setting. This section is consumed by the plan drafter to populate `coverage` in plan.json and generate a coverage-setup task if needed.
 - If multi-phase: **Implementation Approach** includes phase rationale

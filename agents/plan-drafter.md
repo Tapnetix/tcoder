@@ -21,3 +21,5 @@ Template variables available in your invocation prompt:
 - `{REPO_PATH}` — repository root
 
 Use `{PLAN_DIR}` in place of `$PLAN_DIR` references from the SKILL.md.
+
+Check the design doc for a **Test Coverage** section. If present, follow the coverage instructions in SKILL.md to populate `coverage` in plan.json and add coverage verification steps to tasks.
