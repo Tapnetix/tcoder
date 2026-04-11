@@ -1,7 +1,3 @@
-<div align="center">
-
-<img src="assets/banner.png" alt="tcoder banner" width="700">
-
 # TCoder
 
 **Always design, review and test.**
@@ -44,9 +40,9 @@ Then the pipeline runs:
 | 3 | Design review validates the doc against an 8-point checklist | Fresh subagent |
 | 4 | Draft plan writes tasks with exact file paths, TDD steps, verification commands | Fresh subagent |
 | 5 | Plan review catches vague steps, missing paths, design-plan drift | Fresh subagent |
-| 6 | Orchestrator spawns one agent team teammate per task (parallel within phase), each running RED-GREEN-REFACTOR | Agent team teammates |
-| 7 | Per-task reviewer checks each task; fixes sent back to the original implementer via messaging | Fresh subagents |
-| 8 | Implementation review does a cross-task holistic pass | Fresh subagent |
+| 6 | Orchestrator spawns one agent team teammate per task (parallel within phase), each running RED-GREEN-REFACTOR with coverage checks | Agent team teammates |
+| 7 | Per-task reviewer checks each task including test coverage against threshold | Fresh subagents |
+| 8 | Implementation review does a cross-task holistic pass with full coverage report | Fresh subagent |
 | 9 | Create PR opens a PR | Automated |
 | 10 | You review the PR and run `/pr-review` | **You** |
 | 11 | PR reviewer reads the diff cold before any external feedback | Subagent |
@@ -150,7 +146,7 @@ These skills chain automatically. You trigger the first one by describing what t
 
 | Stage | Skill | What happens |
 |-------|-------|-------------|
-| **Design** | [design](skills/design/) | Challenges assumptions, proposes 2-3 approaches, asks you to pick one |
+| **Design** | [design](skills/design/) | Challenges assumptions, proposes 2-3 approaches, detects coverage tooling, asks you to pick one |
 | **Design Gate** | [design-review](skills/design-review/) | 8-point validation: problem clarity, success criteria, architecture fit, scope alignment, handoff quality |
 | **Planning** | [draft-plan](skills/draft-plan/) | Structured plan: `plan.json` manifest + per-task `.md` files with TDD steps, exact file paths, verification commands |
 | **Plan Gate** | [plan-review](skills/plan-review/) | Catches vague steps, missing file paths, design-plan drift, the "Different Claude Test" |
@@ -166,6 +162,7 @@ These skills chain automatically. You trigger the first one by describing what t
 |-------|---------|-------------|
 | [codebase-review](skills/codebase-review/) | `/codebase-review [path]` | Whole-repo audit with parallel subagents per directory, cross-scope reconciliation, findings triaged by fix complexity |
 | [skill-eval](skills/skill-eval/) | `/skill-eval` | Assertion-based grading, blind A/B comparison, adversarial scenarios, variance analysis |
+| [tcoder-settings](skills/tcoder-settings/) | `/tcoder-settings` | View and manage persistent preferences: coverage mode/threshold, reviewer models, merge strategy, and more |
 
 ---
 
@@ -260,6 +257,49 @@ Beyond TDD, `plan.json` supports machine-runnable success criteria at three leve
 ```
 
 The orchestrator runs these automatically: task-level criteria after each task, phase-level after each phase, plan-level before marking the plan complete. A blocking failure stops the pipeline.
+
+</details>
+
+<details>
+<summary><strong>Test Coverage Enforcement</strong></summary>
+
+tcoder ensures every implementation maintains close to 100% test coverage — not as a suggestion, but as a gate enforced at every stage of the pipeline.
+
+### How It Works
+
+During design, tcoder detects whether the target project has coverage tooling configured (jest, pytest-cov, go test -cover, etc.). If it doesn't, the plan includes a setup task as the first step. The coverage command and baseline percentage are recorded in `plan.json`:
+
+```json
+{
+  "coverage": {
+    "command": "npx jest --coverage --coverageReporters=text",
+    "threshold": 90,
+    "baseline": 78
+  }
+}
+```
+
+From there, coverage is checked at every level:
+
+| Stage | What happens |
+|-------|-------------|
+| **Plan review** | Verifies coverage config exists, tasks include coverage steps, setup task present if needed |
+| **Task implementation** | Implementer runs coverage after each TDD green phase, checks against threshold |
+| **Task review** | Reviewer runs coverage scoped to touched files, flags if below threshold |
+| **Implementation review** | Full project coverage report, per-file breakdown, regression detection against baseline |
+| **Phase wrap-up** | Hard gate in enforce mode — coverage must meet threshold before phase can close |
+
+### Three Modes
+
+Control the strictness via `tcoder-settings set coverage_mode <mode>`:
+
+| Mode | Behavior |
+|------|----------|
+| **`enforce`** (default) | Coverage below threshold produces critical review issues. Phases won't close until coverage meets the bar. |
+| **`advisory`** | Coverage is measured and reported, but low coverage is a moderate issue — it won't block the pipeline. |
+| **`off`** | No coverage detection, no coverage in plans, reviewers don't check it. The workflow behaves as it did before this feature. |
+
+The threshold defaults to 90% and can be changed: `tcoder-settings set coverage_threshold 95`.
 
 </details>
 
@@ -486,6 +526,9 @@ The design can be a few sentences. "Single phase, two tasks, no dependency layer
 
 **What are agent teams? Do I need them?**
 Agent teams are a Claude Code feature that lets multiple Claude instances (teammates) work in parallel with push-based completion notifications. The orchestrate skill supports two modes: **subagents** (no env var needed) and **agent teams** (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). The design skill recommends a mode based on plan complexity — agent teams is recommended for large or multi-phase plans.
+
+**How does test coverage enforcement work?**
+By default, tcoder runs in `enforce` mode with a 90% threshold. During design, it detects your project's coverage tooling (or plans a setup task if none exists). Every task implementer runs coverage after each TDD cycle, and all three reviewer stages check coverage against the threshold. You can dial it down with `tcoder-settings set coverage_mode advisory` (report-only) or `tcoder-settings set coverage_mode off` (disable entirely).
 
 **Does it modify my git workflow?**
 It uses feature branches, worktrees for isolation, and squash merges. It never commits directly to main. All changes go through PRs.
