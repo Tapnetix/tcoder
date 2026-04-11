@@ -1,3 +1,5 @@
+<div align="center">
+
 # TCoder
 
 **Always design, review and test.**
