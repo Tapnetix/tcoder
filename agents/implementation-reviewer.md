@@ -41,7 +41,17 @@ Hunt for issues that span task boundaries:
 
 8. **Inadequate integration test coverage** -- missing broad acceptance tests (Level 1), missing boundary tests at cross-task seams (Level 2), tests that mock away the boundaries they should verify
 
-9. **Success Criteria Fulfillment** (skip if design doc is "None")
+9. **E2E Red→Green Arc** (skip when plan.json has no `e2e` block)
+   Verify double-loop TDD was honored across the diff range:
+   - The commit that adds the E2E spec files (`e2e.spec_files` paths) precedes every implementation commit (the `e2e-red` task was first).
+   - No commit between the `e2e-red` sha and HEAD modifies any `e2e.spec_files` path — the red→green arc is preserved.
+   - Running `e2e.command` at HEAD exits zero and every scenario in `e2e.scenarios` is reported as passed.
+   - Severity depends on `E2E_MODE`: `enforce` → below = **Critical**; `advisory` → below = **Moderate**.
+   - Flag: any commit between red-sha and HEAD touches a spec file (spec drift)
+   - Flag: E2E suite is not GREEN at HEAD (implementation incomplete)
+   - Flag: plan has wireframes but no `e2e` block (planning gate bypassed)
+
+10. **Success Criteria Fulfillment** (skip if design doc is "None")
    Read the Goal and Success Criteria sections from the design doc.
    For each criterion: does the implementation deliver this outcome?
 
@@ -59,7 +69,7 @@ Hunt for issues that span task boundaries:
 ### Cross-Task Issues Found
 
 For each issue:
-- **Category** (1-8)
+- **Category** (1-10)
 - **Files** (with line references)
 - **Problem**
 - **Suggested fix**
@@ -118,7 +128,7 @@ Rules for the summary block:
 - `verdict`: "pass" when zero issues remain actionable, "fail" otherwise
 - `issues_found`: total count (including low/informational)
 - `severity`: counts per level (critical, high, medium, low)
-- `issues[]`: one entry per issue with id (sequential integer), severity, category (from cross-task category list), file (path:line or "N/A"), problem, fix
+- `issues[]`: one entry per issue with id (sequential integer), severity, category (from cross-task category list 1-10), file (path:line or "N/A"), problem, fix
 - If zero issues: `{"issues_found": 0, "severity": {"critical": 0, "high": 0, "medium": 0, "low": 0}, "verdict": "pass", "issues": []}`
 - This block must be the LAST fenced code block in your response -- the controller uses the last `json review-summary` block if multiple appear
 

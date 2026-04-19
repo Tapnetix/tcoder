@@ -27,7 +27,7 @@ Dispatch with `model: "$DESIGN_REVIEWER_MODEL"` — review requires strong reaso
 
 Use `subagent_type: "tcoder:design-reviewer"`. **See:** reviewer-prompt.md for invocation template.
 
-## 8-Point Checklist
+## 9-Point Checklist
 
 1. **Problem Clarity** — specific problem, who is affected, consequences of not solving
 2. **Success Criteria Quality** — human-verifiable, implementation-independent, collectively complete, individually necessary
@@ -36,7 +36,8 @@ Use `subagent_type: "tcoder:design-reviewer"`. **See:** reviewer-prompt.md for i
 5. **Scope Alignment** — solves stated problem and not more, non-goals correctly scoped
 6. **Decision Justification** — key decisions include trade-off analysis
 7. **Internal Consistency** — names, paths, concepts consistent across sections
-8. **Handoff Quality** — plan drafter with zero context can produce correct plan from doc alone
+8. **Wireframes + E2E Plan** — wireframe files exist, Given/When/Then scenarios cover each, E2E runner named, `.wireframes-approved` sentinel present (SKIP when design has no UI)
+9. **Handoff Quality** — plan drafter with zero context can produce correct plan from doc alone
 
 ## Output
 

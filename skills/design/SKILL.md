@@ -19,11 +19,12 @@ A todo list, a utility function, a config change — all go through this process
 
 Complete in order:
 
-1. **Explore context** — files, docs, recent commits. Also run `COVERAGE_MODE=$(tcoder-settings get coverage_mode)`. If not `off`: detect whether the project has test coverage tooling configured (look for jest coverage config, pytest-cov/coverage.py, go test -cover, nyc/c8, etc.). Note findings: coverage command, current baseline percentage (run it if tooling exists), or "no coverage tooling — setup task needed". This feeds into the design doc and plan.
+1. **Explore context** — files, docs, recent commits. Also run `COVERAGE_MODE=$(tcoder-settings get coverage_mode)`. If not `off`: detect whether the project has test coverage tooling configured (look for jest coverage config, pytest-cov/coverage.py, go test -cover, nyc/c8, etc.). Note findings: coverage command, current baseline percentage (run it if tooling exists), or "no coverage tooling — setup task needed". Run the equivalent probe for E2E: `E2E_MODE=$(tcoder-settings get e2e_mode)`; when not `off`, detect any existing E2E runner (Playwright, Cypress, Selenium, Vitest+jsdom) and note the command. This feeds into the design doc and plan.
 2. **Challenge assumptions** — question the framing before accepting it
 3. **Ask clarifying questions** — smart batches (see below)
 4. **Propose 2-3 approaches** — trade-offs and your recommendation
 5. **Present design** — sections scaled to complexity, approval after each
+5b. **Wireframes (UI features only)** — produce proper UX wireframes as HTML+CSS under `<plan-dir>/wireframes/` and hard-gate on the user's explicit approval (sentinel `<plan-dir>/.wireframes-approved`) before planning. Also capture **E2E Acceptance Scenarios** in the design doc — one Given/When/Then per wireframe behavior — these drive the plan's `e2e-red` task. **See:** wireframes.md for the detection rule, file layout, approval loop, and tooling notes.
 6. **Set up worktree** — `EnterWorktree` enables session-aware cleanup via `ExitWorktree`:
    - `EnterWorktree(name: "<feature>")` — creates `.claude/worktrees/<feature>` with branch `<feature>`
    - Multi-phase: rename to integration branch: `git branch -m integrate/<feature>` — phase worktrees created by orchestrate as siblings
@@ -202,5 +203,8 @@ When writing the design doc (`.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.m
 - Sections in order: Problem, Goal, Success Criteria, Architecture, Key Decisions, Non-Goals, Implementation Approach
 - **Problem** — what's broken, who's affected, consequences of not solving
 - **Success Criteria** — human-verifiable behavioral statements (not "tests pass"); collectively complete (all pass = goal met), individually necessary
+- **Wireframes** (UI features only, per step 5b) — list each `wireframes/*.html` file with a one-line purpose. Presence of this section triggers the `.wireframes-approved` gate in `validate-plan --check-entry --stage draft-plan` and signals the plan drafter to write an `e2e` block.
+- **E2E Acceptance Scenarios** (present whenever Wireframes is) — one Given/When/Then scenario per wireframe behavior, each naming the wireframe it exercises. These become the assertions in the plan's `e2e-red` task.
 - **Test Coverage** (when `coverage_mode` != `off`) — coverage tool detected or "none (needs setup)", coverage command, baseline percentage or `null`, threshold from `coverage_threshold` setting. This section is consumed by the plan drafter to populate `coverage` in plan.json and generate a coverage-setup task if needed.
+- **E2E Tooling** (when `e2e_mode` != `off` and the feature has a Wireframes section) — name the E2E runner and command (e.g. `npx playwright test`). Consumed by the plan drafter to populate the `e2e.command` field in plan.json.
 - If multi-phase: **Implementation Approach** includes phase rationale

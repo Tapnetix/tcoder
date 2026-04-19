@@ -74,6 +74,16 @@ For multi-task plans with cross-task data flow:
 - Flag: `coverage.baseline` is `null` but no coverage-setup task exists
 - Flag: `coverage.command` doesn't match project tooling (e.g., jest command for a pytest project)
 
+**E2E checks** (when plan.json has an `e2e` object — structural constraints already enforced by `--schema`):
+- Every scenario in the design doc's E2E Acceptance Scenarios section is asserted by at least one spec file in the `e2e-red` task's prose (no orphan scenarios)
+- `e2e-red` task prose shows writing a failing spec per scenario, running the suite, confirming all fail with the expected reason (feature not yet built), then committing
+- `e2e-green` task prose shows running the suite and confirming all scenarios PASS with no edits to spec files since `e2e-red`
+- `e2e.command` is runnable for the project's stack
+- Flag: scenario from design doc with no corresponding assertion in any spec
+- Flag: `e2e-red` prose omits the "verify failure" step (breaks the red-green discipline)
+- Flag: Any non-red task's prose edits or regenerates an E2E spec file
+- Flag: design has Wireframes section but plan.json has no `e2e` block
+
 - Flag: Test expects `fn(a, b)` but implementation defines `fn(a, b, c)`
 - Flag: Multi-task plan with cross-task flow missing broad integration tests
 
@@ -110,9 +120,11 @@ Check for:
 - Flag: Done says "auth works" (not measurable)
 - Flag: References conversation context not in plan
 
-### 7. Success Criteria Coverage (skip if no design doc)
+### 7. Success Criteria + E2E Coverage (skip if no design doc)
 Read the Success Criteria section from the design doc.
 For each criterion, verify it maps to at least one task's "Done when" field.
+
+If the design doc has a **Wireframes** section, apply the E2E checks listed above: every Given/When/Then scenario appears in the `e2e-red` task's spec files, the `e2e-green` task runs the full suite without editing specs, and `e2e.command` is runnable in this project.
 
 A criterion is covered if one or more tasks' "done when" fields collectively
 satisfy the criterion's behavioral intent. The mapping need not be 1:1 —

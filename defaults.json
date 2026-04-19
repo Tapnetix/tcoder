@@ -112,5 +112,25 @@
     "default": 90,
     "description": "Minimum test coverage percentage for touched files (0-100, used in advisory/enforce modes)",
     "used_by": ["orchestrate", "task-reviewer", "implementation-review"]
+  },
+  "e2e_mode": {
+    "type": "enum",
+    "values": ["off", "advisory", "enforce"],
+    "default": "enforce",
+    "description": "End-to-end TDD enforcement: off (skip), advisory (report only), enforce (RED before impl, GREEN after)",
+    "used_by": ["design", "draft-plan", "orchestrate", "plan-review", "implementation-review"]
+  },
+  "e2e_command": {
+    "type": "string",
+    "default": "",
+    "description": "Default E2E runner command (e.g. 'npx playwright test'). Empty string means derive per-plan from design doc.",
+    "used_by": ["design", "draft-plan"]
+  },
+  "wireframes_required": {
+    "type": "enum",
+    "values": ["auto", "always", "never"],
+    "default": "auto",
+    "description": "Whether UX wireframes must be produced for UI-bearing designs: auto (prompted), always, never",
+    "used_by": ["design"]
   }
 }

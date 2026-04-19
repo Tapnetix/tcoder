@@ -42,6 +42,13 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
     "threshold": 90,
     "baseline": null
   },
+  "e2e": {
+    "command": "npx playwright test",
+    "spec_files": ["tests/e2e/login.spec.ts", "tests/e2e/dashboard.spec.ts"],
+    "scenarios": [
+      {"name": "user signs in and lands on dashboard", "wireframe": "wireframes/01-login.html"}
+    ]
+  },
   "success_criteria": [
     {
       "run": "npm test",
@@ -97,6 +104,10 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
   - `command` (string, required): Shell command that produces a text coverage report (e.g., `npx jest --coverage --coverageReporters=text`).
   - `threshold` (integer, required): Minimum coverage percentage for touched files (from `coverage_threshold` setting).
   - `baseline` (integer or null, required): Project-wide coverage percentage measured before implementation begins. `null` if the project had no coverage tooling and a setup task will establish it.
+- `e2e` (object, optional): Present when the design has a Wireframes section and `e2e_mode` is not `off`. Drives double-loop TDD — the plan must contain exactly one `e2e-red` task (creates failing specs before impl) and exactly one `e2e-green` task (verifies specs pass after impl).
+  - `command` (string, required): Shell command that runs the full E2E suite (e.g., `npx playwright test`). Non-empty.
+  - `spec_files` (array of strings, required): Paths to E2E spec files, one per wireframe/flow. Non-empty. Each path must appear in the `e2e-red` task's `files.create`, and in no other task's `files.create` or `files.modify`.
+  - `scenarios` (array of objects, required): Given/When/Then scenarios mirrored from the design doc's E2E Acceptance Scenarios section. Non-empty. Each scenario has `name` and optionally `wireframe` (path to the wireframe file it exercises).
 - `success_criteria` (array, optional): Plan-level criteria. Fields stay in the schema for forward compatibility but are not programmatically enforced yet (see Deferred: Success Criteria Runner).
   - `run` (string, required): Shell command to execute. Must be non-empty.
   - `expect_exit` (integer, optional): Expected exit code.
@@ -108,6 +119,7 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
 - `phases[].status` (string, required): `Not Started` | `In Progress` | `Complete (YYYY-MM-DD)`.
 - `phases[].success_criteria` (array, optional): Phase-level criteria. Same structure as plan-level. Not enforced yet.
 - `phases[].tasks[].status` (string, required): `pending` | `in_progress` | `complete` | `skipped`.
+- `phases[].tasks[].kind` (string, optional): `e2e-red` | `e2e-green` when the plan has an `e2e` block; omitted for regular implementation tasks. Structural constraints enforced by `--schema`: `e2e-red` must be the first task of the first phase and create every `e2e.spec_files` entry; `e2e-green` must be the last task of the last phase and have empty `files.create`/`files.modify`. No other task may create or modify any `e2e.spec_files` path.
 - `phases[].tasks[].depends_on` (array of strings): Task IDs this task consumes output from. Must reference same or prior phase only.
 - `phases[].tasks[].files` (object, required): `create`, `modify`, `test` — arrays of file paths. File paths must be unique across all tasks in the plan (duplicate creates are a bug).
 - `phases[].tasks[].success_criteria` (array, optional): Task-level criteria. Same structure. Not enforced yet.

@@ -89,6 +89,15 @@ Optional: `success_criteria` at plan/phase/task levels. `workflow`: `pr-create` 
 
 If baseline is `null` (no coverage tooling), make the first task in the first phase a coverage-setup task: configure the project's test framework for coverage reporting, run the command, and verify it produces output. Subsequent tasks include a coverage verification step after the TDD green phase: run the coverage command scoped to the task's touched files and verify coverage meets the threshold.
 
+**E2E (double-loop TDD):** When the design doc has a **Wireframes** section (UI feature) and `e2e_mode` != `off`, populate the `e2e` object in plan.json and structure tasks to enforce RED-before-impl / GREEN-after:
+- `command`: E2E runner from the design doc's E2E Tooling section (e.g., `npx playwright test`)
+- `spec_files`: list of E2E spec files, one per wireframe/flow
+- `scenarios`: Given/When/Then scenarios from the design doc (mirror 1:1)
+
+Task structure becomes mandatory:
+- **First task of first phase** has `kind: "e2e-red"`. It writes ALL spec files (every `spec_files` path appears in its `files.create`), asserts every scenario, and commits — they must FAIL when run (no implementation exists yet). No other task may create or modify any spec file.
+- **Last task of last phase** has `kind: "e2e-green"`. It runs the E2E suite and asserts every scenario now PASSES. `files.create` and `files.modify` must be empty — it's a verification task, not a code-editing task. `validate-plan --schema` enforces these constraints structurally.
+
 **See:** `schema-reference.md` for full schema reference.
 
 **Task .md file structure:**

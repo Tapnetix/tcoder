@@ -36,6 +36,7 @@ Note: `workflow` and `execution_mode` are read from plan.json (set by the design
 - Read implementation reviewer model: `IMPL_REVIEWER_MODEL=$(tcoder-settings get implementation_reviewer_model)`
 Note: These model settings are substituted into dispatch template variables `{TASK_IMPLEMENTER_MODEL}`, `{TASK_REVIEWER_MODEL}`, and `{IMPL_REVIEWER_MODEL}` when dispatching implementers, reviewers, and fix-cycle agents.
 - Read coverage config: `COVERAGE_MODE=$(tcoder-settings get coverage_mode)` and `COVERAGE_THRESHOLD=$(tcoder-settings get coverage_threshold)`. Also read from plan.json: `COVERAGE_CMD=$(jq -r '.coverage.command // empty' "$PLAN_JSON")`. If `COVERAGE_MODE` is not `off` and `COVERAGE_CMD` is non-empty, pass `{COVERAGE_MODE}`, `{COVERAGE_THRESHOLD}`, and `{COVERAGE_CMD}` to implementer and reviewer prompts.
+- Read E2E config: `E2E_MODE=$(tcoder-settings get e2e_mode)` and `E2E_CMD=$(jq -r '.e2e.command // empty' "$PLAN_JSON")`. When both are set, E2E gates are active — the `e2e-red` task must leave the suite RED before impl begins, and the `e2e-green` task must leave it GREEN after all impl completes.
 - Count phases: `PHASE_COUNT=$(jq '.phases | length' "$PLAN_JSON")`
 - Validate schema: `validate-plan --schema "$PLAN_JSON"`
 - Validate entry gate: `validate-plan --check-entry "$PLAN_JSON" --stage execution`
@@ -69,6 +70,16 @@ Follow the dispatch protocol from the mode-specific file read during setup. Both
 - After review passes: validate criteria (`validate-plan --criteria "$PLAN_JSON" --task {TASK_ID}`), merge task branch, check for newly unblocked tasks
 
 The dispatch file specifies how tasks are dispatched (teammates vs subagents), how completions are detected (push vs background notification), and how review fixes are communicated (mailbox vs fresh agent).
+
+### E2E Gate (when E2E_MODE != off and E2E_CMD is set)
+
+Run these gates around the `e2e-red` and `e2e-green` tasks. The goal: prove the E2E suite is RED before implementation begins, and GREEN only after complete implementation — without the E2E spec files ever being edited between those two points.
+
+1. **After `e2e-red` task completes (first task of first phase):** Run `$E2E_CMD` in the worktree. It MUST exit non-zero. Record `E2E_RED_SHA=$(git rev-parse HEAD)` and store it in `${PLAN_DIR}/reviews.json` as `{"type":"e2e-gate","scope":"red","sha":"...","failure_count":N,"verdict":"pass","timestamp":"..."}`. If the suite passes prematurely, the spec is testing a mock or an already-implemented feature — fail hard and AskUserQuestion to investigate.
+2. **Between tasks (advisory):** No gate. Implementation tasks may change the unit-test suite freely but MUST NOT edit any path in `e2e.spec_files` (enforced by task-implementer deviation rule 5 and reviewed by task-reviewer + implementation-reviewer).
+3. **After `e2e-green` task completes (last task of last phase):** Verify `git diff $E2E_RED_SHA..HEAD -- $(jq -r '.e2e.spec_files | join(" ")' "$PLAN_JSON")` is empty — no spec drift. Run `$E2E_CMD`. It MUST exit zero and every scenario must appear as passed. Record `{"type":"e2e-gate","scope":"green","verdict":"pass",...}` in reviews.json.
+
+When `E2E_MODE=advisory`, violations are reported in completion notes but don't block advancement. When `E2E_MODE=enforce`, any violation fails the phase and must be fixed before `validate-plan --check-review` can pass.
 
 ### Phase Wrap-Up
 

@@ -506,6 +506,123 @@ do_schema() {
     done
   done
 
+  # --- E2E block + task-kind validation ---
+  # When plan.json has an e2e object, enforce double-loop TDD structure:
+  #   * exactly one task has kind=e2e-red (first task of first phase)
+  #   * exactly one task has kind=e2e-green (last task of last phase, no files
+  #     created or modified)
+  #   * every e2e.spec_files entry is created only by the e2e-red task
+  # When e2e is absent, task kind is still validated if present, but no
+  # structural constraints apply (plans without wireframes/E2E are backward
+  # compatible).
+  local e2e_has
+  e2e_has=$(echo "$json" | jq 'has("e2e")')
+  if [[ "$e2e_has" == "true" ]]; then
+    local e2e_command e2e_spec_count e2e_scenarios_count
+    e2e_command=$(echo "$json" | jq -r '.e2e.command // ""')
+    e2e_spec_count=$(echo "$json" | jq '(.e2e.spec_files // []) | length')
+    e2e_scenarios_count=$(echo "$json" | jq '(.e2e.scenarios // []) | length')
+    if [[ -z "$e2e_command" || "$e2e_command" =~ ^[[:space:]]*$ ]]; then
+      err "ERROR: empty_e2e_command: e2e.command must be a non-empty string"
+    fi
+    [[ "$e2e_spec_count" -eq 0 ]] && err "ERROR: empty_e2e_spec_files: e2e.spec_files must contain at least one path"
+    [[ "$e2e_scenarios_count" -eq 0 ]] && err "ERROR: empty_e2e_scenarios: e2e.scenarios must contain at least one scenario"
+  fi
+
+  # Extract per-task {pi, ti, id, kind, create, modify} for kind validation.
+  local kinds_json kind_count
+  kinds_json=$(echo "$json" | jq -c '
+    [.phases | to_entries[] | .key as $pi | .value.tasks // [] | to_entries[] |
+      { pi: $pi, ti: .key, id: .value.id,
+        kind: (.value.kind // null),
+        create: (.value.files.create // []),
+        modify: (.value.files.modify // []) }]')
+  kind_count=$(echo "$kinds_json" | jq 'length')
+
+  local red_count=0 green_count=0
+  local red_pi=-1 red_ti=-1 green_pi=-1 green_ti=-1
+  for ((ki=0; ki<kind_count; ki++)); do
+    local k_kind k_id k_pi k_ti
+    k_kind=$(echo "$kinds_json" | jq -r ".[$ki].kind // \"\"")
+    [[ -z "$k_kind" ]] && continue
+    k_id=$(echo "$kinds_json" | jq -r ".[$ki].id // \"\"")
+    k_pi=$(echo "$kinds_json" | jq ".[$ki].pi")
+    k_ti=$(echo "$kinds_json" | jq ".[$ki].ti")
+    case "$k_kind" in
+      "e2e-red")
+        red_count=$((red_count + 1))
+        red_pi=$k_pi; red_ti=$k_ti
+        ;;
+      "e2e-green")
+        green_count=$((green_count + 1))
+        green_pi=$k_pi; green_ti=$k_ti
+        ;;
+      *)
+        err "ERROR: invalid_task_kind: task $k_id has kind='$k_kind' (expected: e2e-red or e2e-green)"
+        ;;
+    esac
+  done
+
+  if [[ "$e2e_has" == "true" && "$phase_count" -gt 0 ]]; then
+    local last_phase_idx last_task_idx
+    last_phase_idx=$((phase_count - 1))
+    last_task_idx=$(echo "$json" | jq ".phases[$last_phase_idx].tasks | length - 1")
+
+    [[ $red_count -eq 0 ]] && err "ERROR: missing_e2e_red_task: plan has e2e block but no task is marked kind='e2e-red'"
+    [[ $red_count -gt 1 ]] && err "ERROR: duplicate_e2e_red_task: more than one task marked kind='e2e-red'"
+    [[ $green_count -eq 0 ]] && err "ERROR: missing_e2e_green_task: plan has e2e block but no task is marked kind='e2e-green'"
+    [[ $green_count -gt 1 ]] && err "ERROR: duplicate_e2e_green_task: more than one task marked kind='e2e-green'"
+
+    if [[ $red_count -ge 1 ]]; then
+      if [[ $red_pi -ne 0 || $red_ti -ne 0 ]]; then
+        err "ERROR: e2e_red_position: e2e-red must be the first task of the first phase (got phase index $red_pi task index $red_ti)"
+      fi
+    fi
+    if [[ $green_count -ge 1 ]]; then
+      if [[ $green_pi -ne $last_phase_idx || $green_ti -ne $last_task_idx ]]; then
+        err "ERROR: e2e_green_position: e2e-green must be the last task of the last phase (got phase index $green_pi task index $green_ti)"
+      fi
+      local g_create_count g_modify_count
+      g_create_count=$(echo "$json" | jq ".phases[$green_pi].tasks[$green_ti].files.create | length")
+      g_modify_count=$(echo "$json" | jq ".phases[$green_pi].tasks[$green_ti].files.modify | length")
+      if [[ "$g_create_count" -gt 0 || "$g_modify_count" -gt 0 ]]; then
+        err "ERROR: e2e_green_files_not_empty: e2e-green task must have empty files.create and files.modify (creates=$g_create_count modifies=$g_modify_count)"
+      fi
+    fi
+
+    # Every e2e spec file must be created by the e2e-red task (and only by it)
+    local spec_files_list
+    spec_files_list=$(echo "$json" | jq -r '.e2e.spec_files[]?')
+    if [[ $red_count -ge 1 ]]; then
+      local red_creates_json
+      red_creates_json=$(echo "$json" | jq -c ".phases[$red_pi].tasks[$red_ti].files.create // []")
+      while IFS= read -r spec; do
+        [[ -z "$spec" ]] && continue
+        if ! echo "$red_creates_json" | jq -e --arg s "$spec" 'index($s) != null' > /dev/null; then
+          err "ERROR: e2e_spec_not_created: e2e.spec_files references '$spec' but e2e-red task does not create it"
+        fi
+      done <<< "$spec_files_list"
+    fi
+
+    # No other task may create or modify a spec file
+    for ((ki=0; ki<kind_count; ki++)); do
+      local k_kind k_id t_pi t_ti
+      k_kind=$(echo "$kinds_json" | jq -r ".[$ki].kind // \"\"")
+      [[ "$k_kind" == "e2e-red" ]] && continue
+      k_id=$(echo "$kinds_json" | jq -r ".[$ki].id // \"\"")
+      local t_create t_modify
+      t_create=$(echo "$kinds_json" | jq -c ".[$ki].create")
+      t_modify=$(echo "$kinds_json" | jq -c ".[$ki].modify")
+      while IFS= read -r spec; do
+        [[ -z "$spec" ]] && continue
+        if echo "$t_create" | jq -e --arg s "$spec" 'index($s) != null' > /dev/null \
+           || echo "$t_modify" | jq -e --arg s "$spec" 'index($s) != null' > /dev/null; then
+          err "ERROR: e2e_spec_contamination: task $k_id touches e2e spec file '$spec' — only the e2e-red task may create it"
+        fi
+      done <<< "$spec_files_list"
+    done
+  fi
+
   if [ ${#ERRORS[@]} -gt 0 ]; then
     for e in "${ERRORS[@]}"; do echo "$e" >&2; done
     exit 1
@@ -650,6 +767,21 @@ do_check_entry() {
       local result
       if ! result=$(check_review_record "$plan_dir" "design-review" "design"); then
         echo "ERROR: entry gate failed for stage '$stage' — design-review not passed ($result). Run design-review first." >&2
+        exit 1
+      fi
+      # Wireframe approval sub-gate: when any design-*.md declares a Wireframes
+      # section, user must have approved the HTML wireframes (sentinel file).
+      local wireframes_needed=0
+      shopt -s nullglob
+      for design_file in "$plan_dir"/design-*.md; do
+        if grep -qiE '^##[[:space:]]+wireframes([[:space:]]|$)' "$design_file"; then
+          wireframes_needed=1
+          break
+        fi
+      done
+      shopt -u nullglob
+      if [[ $wireframes_needed -eq 1 && ! -f "$plan_dir/.wireframes-approved" ]]; then
+        echo "ERROR: entry gate failed for stage '$stage' — wireframes_not_approved: design doc has a Wireframes section but $plan_dir/.wireframes-approved is missing. Get user approval and touch the sentinel." >&2
         exit 1
       fi
       ;;

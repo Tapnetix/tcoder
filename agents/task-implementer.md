@@ -35,6 +35,7 @@ Handle deviations from the plan using these rules:
 | 2: Auto-add critical | Missing validation, auth, error handling | Add it, document in completion notes |
 | 3: Auto-fix blocker | Missing dep, broken import, wrong types | Fix it, document in completion notes |
 | 4: STOP | Architectural change (new table, library swap, breaking API) | Report to lead: what change, which task, why plan doesn't cover it. In agent-teams mode, send via mailbox. In subagents mode, include in your final response. |
+| 5: Never edit E2E specs | Your task touches a path listed in `e2e.spec_files` | STOP. The E2E spec set in the `e2e-red` task is the red→green contract — editing it to force green defeats the gate. If the spec looks wrong, escalate via Rule 4 rather than patching. |
 
 Only fix issues caused by the current task. Pre-existing issues go to deferred list in completion notes. After 3 failed fix attempts on the same issue, document and move on.
 

@@ -21,7 +21,7 @@ When the dispatch prompt includes a `## Prior Issues` section, run in two stages
 - If `resolution` is `"fixed"`: grep/read the design doc to confirm the fix described was actually applied. If the fix is NOT present, re-raise the issue with a note that the claimed fix was not found.
 - If `resolution` is `"dismissed"`: note the dismissal reason. Only re-raise if the dismissal reason is factually incorrect (e.g., "not applicable" for something that clearly applies). Reasonable judgment calls by the user should be respected.
 
-**Stage 2 — Full checklist scan:** Run the complete 8-point checklist looking for NEW issues only. Do not re-raise issues that were verified as fixed in Stage 1 or reasonably dismissed. A fix for one issue can introduce a new problem in the same category — check all 8 categories regardless.
+**Stage 2 — Full checklist scan:** Run the complete 9-point checklist looking for NEW issues only. Do not re-raise issues that were verified as fixed in Stage 1 or reasonably dismissed. A fix for one issue can introduce a new problem in the same category — check all 9 categories regardless.
 
 In the `json review-summary` output:
 - Include only issues that are actionable (unresolved prior issues + new issues)
@@ -41,7 +41,7 @@ Assign severity based on downstream impact — specifically, whether the finding
 
 The key test: "If I handed this design doc to a plan-drafter right now, would this finding cause the plan to be wrong or incomplete?" If yes → `high` minimum. If no → `medium` maximum.
 
-## 8-Point Checklist
+## 9-Point Checklist
 
 Work through each systematically. Read the FULL design doc first, then evaluate.
 
@@ -128,7 +128,21 @@ Cross-reference across all sections:
 - Flag: Section references something not present in the referenced section
 - Flag: File change table entry not accounted for in architecture prose (or vice versa)
 
-### 8. Handoff Quality
+### 8. Wireframes + E2E Plan (only when design has a Wireframes section)
+
+- Every file listed in the Wireframes section exists at the declared path under `<plan-dir>/wireframes/`.
+- The E2E Acceptance Scenarios section is present and every scenario references at least one wireframe file that exists.
+- Every wireframe file has at least one scenario referencing it (no orphan wireframes, no orphan scenarios).
+- Scenarios are behavioral (Given/When/Then) and implementation-independent.
+- An E2E Tooling section names a concrete runner and command (e.g. `npx playwright test`) — not "TBD".
+- The `.wireframes-approved` sentinel exists in the plan directory (user has explicitly approved).
+
+- Flag: Scenario references wireframe file that isn't in the Wireframes section (or vice versa)
+- Flag: Scenario is implementation-detail ("`loginHandler()` returns 200")
+- Flag: E2E Tooling section missing or names no concrete command
+- Flag: Wireframes section present but `.wireframes-approved` sentinel missing — design is not approved, planning must not start
+
+### 9. Handoff Quality
 Evaluate whether a plan drafter with zero conversation context can produce a correct plan:
 - No implicit assumptions left uncaptured
 - File paths and change descriptions are specific enough
@@ -162,6 +176,7 @@ For each issue:
 | Scope alignment | PASS/FAIL |
 | Decision justification | PASS/FAIL |
 | Internal consistency | PASS/FAIL |
+| Wireframes + E2E plan | PASS/FAIL/SKIP |
 | Handoff quality | PASS/FAIL |
 
 **Issues:** [count]
