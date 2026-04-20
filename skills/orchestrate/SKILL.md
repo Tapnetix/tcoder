@@ -119,6 +119,7 @@ Skip integration branch and phase worktrees. Work directly in the feature worktr
 6. Route on workflow:
    - `"pr-create"`: invoke pr-create (targets main), `validate-plan --check-workflow "$PLAN_JSON"`, stop
    - `"pr-merge"`: invoke pr-create, read `REVIEW_WAIT=$(tcoder-settings get review_wait_minutes)`, poll checks + pr-review --automated (skip if $REVIEW_WAIT is 0; if skipped, invoke pr-merge directly), `validate-plan --check-workflow "$PLAN_JSON"`
+   - `"direct-merge"`: follow the **Direct Merge Protocol** below instead of creating a PR, then `validate-plan --check-workflow "$PLAN_JSON"`
 
 ## After All Phases (Multi-Phase Only)
 
@@ -129,8 +130,35 @@ Skip integration branch and phase worktrees. Work directly in the feature worktr
 5. Route on workflow:
    - `"pr-merge"`: create final PR, poll checks, pr-review --automated, `validate-plan --check-workflow "$PLAN_JSON"`, clean up
    - `"pr-create"`: create final PR, `validate-plan --check-workflow "$PLAN_JSON"`, stop
+   - `"direct-merge"`: follow the **Direct Merge Protocol** below (operate on the integration branch), `validate-plan --check-workflow "$PLAN_JSON"`, clean up
 
 **Continuity:** Run continuously. Pause only for Rule 4 violations.
+
+## Direct Merge Protocol
+
+Use when `workflow == "direct-merge"`. Skips PR creation entirely — fast-forward merges the feature (or integration) branch into `main` locally, then asks the user whether to push. This is the right path when the repo doesn't enforce PR-only merges via branch protection and no external review is needed.
+
+1. Determine the source branch:
+   - Single-phase plan: the feature worktree's current branch
+   - Multi-phase plan: the integration branch (`jq -r '.integration_branch' "$PLAN_JSON"`)
+2. From the repository root (not a worktree), run:
+   ```bash
+   git checkout main
+   git fetch origin main
+   git merge --ff-only origin/main  # ensure local main is current
+   git merge --ff-only <source-branch>
+   ```
+   If `--ff-only` fails (main advanced after this work started), STOP and AskUserQuestion: `Rebase the feature onto main, fall back to pr-create, or abort?` Do not use `--no-ff` silently — it changes history shape.
+3. AskUserQuestion — single question, header "Push":
+   - **Push to origin** — `git push origin main` (use the same SSH/HTTPS creds the user established earlier in the session)
+   - **Not now** — stop; tell the user they can push later with `git push origin main`
+4. After a successful push, offer branch cleanup:
+   - `git branch -d <source-branch>` locally
+   - `git push origin --delete <source-branch>` remotely (only if the branch was pushed earlier)
+   - For multi-phase: also prompt about deleting the worktrees with `git worktree remove`
+5. If `.claude-plugin/marketplace.json` version was bumped in this branch, remind the user to `gh release create vX.Y.Z --generate-notes`. Do not run it yourself — release creation is visible to the wider audience and needs the user's explicit call.
+
+If the push is rejected by branch protection, tell the user: "Direct push rejected. Your branch protection requires a PR — re-run with workflow=pr-merge or open a PR manually." Do not retry with `--force`.
 
 ## Key Constraints
 

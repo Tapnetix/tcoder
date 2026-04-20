@@ -104,7 +104,7 @@ do_schema() {
     err "ERROR: missing_field: workflow"
   else
     case "$workflow" in
-      "pr-create"|"pr-merge"|"plan-only") ;;
+      "pr-create"|"pr-merge"|"direct-merge"|"plan-only") ;;
       *) err "ERROR: invalid_workflow: $workflow" ;;
     esac
   fi
@@ -1384,6 +1384,17 @@ do_check_workflow() {
     if ! fr_result=$(check_review_record "$plan_dir" "impl-review" "final"); then
       gate_errors+=("impl-review final: $fr_result")
     fi
+  fi
+
+  # direct-merge skips all PR existence checks — no PR is created when the
+  # feature is merged into main locally. Reviews + Complete status are enough.
+  if [[ "$workflow" == "direct-merge" ]]; then
+    if [[ ${#gate_errors[@]} -gt 0 ]]; then
+      echo "ERROR: workflow gate (direct-merge) unsatisfied:" >&2
+      for ge in "${gate_errors[@]}"; do echo "  - $ge" >&2; done
+      exit 1
+    fi
+    exit 0
   fi
 
   check_pr_exists() {

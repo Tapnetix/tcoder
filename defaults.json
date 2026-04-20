@@ -27,9 +27,9 @@
   },
   "workflow": {
     "type": "enum",
-    "values": ["pr-create", "pr-merge", "plan-only"],
+    "values": ["pr-create", "pr-merge", "direct-merge", "plan-only"],
     "prompt_required": true,
-    "description": "Post-orchestration workflow (prompted each time unless explicitly set)",
+    "description": "Post-orchestration workflow: pr-create stops at PR; pr-merge auto-merges via PR; direct-merge merges locally into main (no PR) then asks whether to push; plan-only stops after plan review",
     "used_by": ["design", "orchestrate"]
   },
   "execution_mode": {

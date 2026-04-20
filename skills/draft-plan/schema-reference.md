@@ -100,6 +100,7 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
 
 - `schema` (integer, required): Schema version for forward compatibility.
 - `status` (string, required): `Not Yet Started` | `In Development` | `Complete`.
+- `workflow` (string, required): `pr-create` | `pr-merge` | `direct-merge` | `plan-only`. Controls the post-implementation delivery path. `direct-merge` fast-forward merges the feature branch into `main` locally and asks before pushing — use only when branch protection doesn't require PRs.
 - `coverage` (object, optional): Present when `coverage_mode` setting is not `off`. Captures the project's test coverage configuration so implementers and reviewers can measure coverage consistently.
   - `command` (string, required): Shell command that produces a text coverage report (e.g., `npx jest --coverage --coverageReporters=text`).
   - `threshold` (integer, required): Minimum coverage percentage for touched files (from `coverage_threshold` setting).
