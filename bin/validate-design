@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  validate-design --check <path>
+
+Checks a design doc for structural compliance against skills/design/design-spec.md.
+Exit 0 (silent) on success. Exit 1 with ERROR: lines on stderr on failure.
+USAGE
+  exit 1
+}
+
+ERRORS=()
+err() { ERRORS+=("$1"); }
+
+# Canonical section order. The first 8 are always required; the last 4 are
+# conditionally required (documented in design-spec.md):
+#   - Wireframes: when the feature has user-facing UI
+#   - E2E Acceptance Scenarios / E2E Tooling: required when Wireframes is present
+#   - Test Coverage: when coverage_mode != off
+# The validator treats "always required" as hard errors and the conditionals
+# as order-only checks unless a triggering condition (e.g. Wireframes present)
+# makes one mandatory.
+ALWAYS_REQUIRED=(
+  "Problem"
+  "Goal"
+  "Success Criteria"
+  "Architecture"
+  "Key Decisions"
+  "Non-Goals"
+  "Implementation Approach"
+  "Scope Estimate"
+)
+
+ALL_ORDERED=(
+  "Problem"
+  "Goal"
+  "Success Criteria"
+  "Wireframes"
+  "E2E Acceptance Scenarios"
+  "Architecture"
+  "Key Decisions"
+  "Non-Goals"
+  "Implementation Approach"
+  "Test Coverage"
+  "E2E Tooling"
+  "Scope Estimate"
+)
+
+section_line() {
+  # Returns the line number of a ## Heading, or empty if absent.
+  local doc="$1" name="$2"
+  grep -nE "^## ${name}$" "$doc" | head -1 | cut -d: -f1 || true
+}
+
+next_heading_line() {
+  # Returns the line number of the next ## heading after $start, or total_lines+1.
+  local doc="$1" start="$2" total="$3"
+  local next
+  next="$(awk -v s="$start" 'NR > s && /^## / { print NR; exit }' "$doc")"
+  echo "${next:-$((total + 1))}"
+}
+
+extract_backticked_paths() {
+  # Emit backticked file paths between $start and $end. Exclude URLs,
+  # placeholder markers, and non-path strings (must contain / and look
+  # like a file path or have an extension).
+  local doc="$1" start="$2" end="$3"
+  awk -v s="$start" -v e="$end" 'NR > s && NR < e' "$doc" \
+    | grep -oE '`[^`]+`' \
+    | sed 's/^`//;s/`$//' \
+    | grep -E '^[a-zA-Z0-9_.][a-zA-Z0-9_./-]*(\.[a-zA-Z0-9]+|/[a-zA-Z0-9_./-]+)$' \
+    | grep -vE '^https?://' \
+    | grep -vE 'YYYY-MM-DD' \
+    | grep -vE '<[^>]+>' \
+    | sort -u \
+    || true
+}
+
+do_check() {
+  local doc="$1"
+
+  if [[ ! -f "$doc" ]]; then
+    echo "ERROR: file not found: $doc" >&2
+    exit 1
+  fi
+
+  local total_lines
+  total_lines="$(wc -l < "$doc")"
+
+  # ----------------------------------------------------------------
+  # Check 1: Always-required section presence
+  # ----------------------------------------------------------------
+  for section in "${ALWAYS_REQUIRED[@]}"; do
+    if ! grep -qE "^## ${section}$" "$doc"; then
+      err "missing_section: '## ${section}' not found"
+    fi
+  done
+
+  # ----------------------------------------------------------------
+  # Check 2: Section ordering (required + conditional sections that exist)
+  # ----------------------------------------------------------------
+  local prev_line=0
+  local prev_name=""
+  for section in "${ALL_ORDERED[@]}"; do
+    local line
+    line="$(section_line "$doc" "$section")"
+    if [[ -n "$line" ]]; then
+      if [[ -n "$prev_name" && "$line" -lt "$prev_line" ]]; then
+        err "section_order: '## ${section}' must come after '## ${prev_name}'"
+      fi
+      prev_line="$line"
+      prev_name="$section"
+    fi
+  done
+
+  # ----------------------------------------------------------------
+  # Check 3: Empty section detection (any section that appears must have content)
+  # ----------------------------------------------------------------
+  for section in "${ALL_ORDERED[@]}"; do
+    local section_ln
+    section_ln="$(section_line "$doc" "$section")"
+    [[ -z "$section_ln" ]] && continue
+
+    local end_ln
+    end_ln="$(next_heading_line "$doc" "$section_ln" "$total_lines")"
+
+    local has_content
+    has_content="$(awk -v start="$section_ln" -v end="$end_ln" \
+      'NR > start && NR < end && /[^[:space:]]/ { found=1; exit } END { print (found ? "yes" : "no") }' "$doc")"
+
+    if [[ "$has_content" == "no" ]]; then
+      err "empty_section: '## ${section}' has no content"
+    fi
+  done
+
+  # ----------------------------------------------------------------
+  # Check 4: Cross-references between Architecture and Implementation Approach
+  # ----------------------------------------------------------------
+  local arch_line impl_line
+  arch_line="$(section_line "$doc" "Architecture")"
+  impl_line="$(section_line "$doc" "Implementation Approach")"
+
+  if [[ -n "$arch_line" && -n "$impl_line" ]]; then
+    local arch_next impl_next
+    arch_next="$(next_heading_line "$doc" "$arch_line" "$total_lines")"
+    impl_next="$(next_heading_line "$doc" "$impl_line" "$total_lines")"
+
+    local arch_paths impl_paths
+    arch_paths="$(extract_backticked_paths "$doc" "$arch_line" "$arch_next")"
+    impl_paths="$(extract_backticked_paths "$doc" "$impl_line" "$impl_next")"
+
+    while IFS= read -r path; do
+      [[ -z "$path" ]] && continue
+      # Wireframe paths legitimately appear in Impl Approach without Architecture
+      # (they're design artifacts, not source code). Skip those here.
+      [[ "$path" == wireframes/* ]] && continue
+      if ! echo "$impl_paths" | grep -qFx "$path"; then
+        err "cross_ref_mismatch: '${path}' appears in Architecture but not Implementation Approach"
+      fi
+    done <<< "$arch_paths"
+
+    while IFS= read -r path; do
+      [[ -z "$path" ]] && continue
+      [[ "$path" == wireframes/* ]] && continue
+      if ! echo "$arch_paths" | grep -qFx "$path"; then
+        err "cross_ref_mismatch: '${path}' appears in Implementation Approach but not Architecture"
+      fi
+    done <<< "$impl_paths"
+  fi
+
+  # ----------------------------------------------------------------
+  # Check 5: Non-goal rationale (each bullet needs 10+ words)
+  # ----------------------------------------------------------------
+  local nongoals_line
+  nongoals_line="$(section_line "$doc" "Non-Goals")"
+
+  if [[ -n "$nongoals_line" ]]; then
+    local nongoals_next
+    nongoals_next="$(next_heading_line "$doc" "$nongoals_line" "$total_lines")"
+
+    local item_num=0
+    local current_item=""
+    check_item() {
+      if [[ -n "$current_item" ]]; then
+        local word_count
+        word_count="$(echo "$current_item" | wc -w | tr -d ' ')"
+        if [[ "$word_count" -lt 10 ]]; then
+          err "non_goal_rationale: Non-Goals item ${item_num} has no rationale (needs at least 10 words)"
+        fi
+      fi
+    }
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^[-*] ]]; then
+        check_item
+        item_num=$((item_num + 1))
+        current_item="$line"
+      elif [[ -n "$current_item" && "$line" =~ [^[:space:]] ]]; then
+        current_item="$current_item $line"
+      elif [[ -z "$line" || ! "$line" =~ [^[:space:]] ]]; then
+        check_item
+        current_item=""
+      fi
+    done < <(awk -v s="$nongoals_line" -v e="$nongoals_next" 'NR > s && NR < e' "$doc")
+    check_item
+  fi
+
+  # ----------------------------------------------------------------
+  # Check 6: Scope Estimate mentions both phase and task
+  # ----------------------------------------------------------------
+  local scope_line
+  scope_line="$(section_line "$doc" "Scope Estimate")"
+
+  if [[ -n "$scope_line" ]]; then
+    local scope_next scope_content
+    scope_next="$(next_heading_line "$doc" "$scope_line" "$total_lines")"
+    scope_content="$(awk -v s="$scope_line" -v e="$scope_next" 'NR > s && NR < e' "$doc")"
+
+    if ! echo "$scope_content" | grep -iqE 'phase'; then
+      err "missing_scope_estimate: '## Scope Estimate' does not mention phase count"
+    fi
+    if ! echo "$scope_content" | grep -iqE 'task'; then
+      err "missing_scope_estimate: '## Scope Estimate' does not mention task count"
+    fi
+  fi
+
+  # ----------------------------------------------------------------
+  # Check 7: Wireframes triad — if Wireframes present, Scenarios + Tooling required
+  # ----------------------------------------------------------------
+  local wf_line scen_line tool_line
+  wf_line="$(section_line "$doc" "Wireframes")"
+  scen_line="$(section_line "$doc" "E2E Acceptance Scenarios")"
+  tool_line="$(section_line "$doc" "E2E Tooling")"
+
+  if [[ -n "$wf_line" ]]; then
+    if [[ -z "$scen_line" ]]; then
+      err "missing_e2e_scenarios: '## Wireframes' present but '## E2E Acceptance Scenarios' is missing"
+    fi
+    if [[ -z "$tool_line" ]]; then
+      err "missing_e2e_tooling: '## Wireframes' present but '## E2E Tooling' is missing"
+    fi
+  fi
+
+  # Inverse: Scenarios without Wireframes is also inconsistent.
+  if [[ -n "$scen_line" && -z "$wf_line" ]]; then
+    err "missing_wireframes: '## E2E Acceptance Scenarios' present but '## Wireframes' is missing"
+  fi
+
+  # ----------------------------------------------------------------
+  # Check 8: Wireframe ↔ scenario pairing (every wireframe referenced by at
+  # least one scenario; every scenario references at least one listed wireframe)
+  # ----------------------------------------------------------------
+  if [[ -n "$wf_line" && -n "$scen_line" ]]; then
+    local wf_next scen_next
+    wf_next="$(next_heading_line "$doc" "$wf_line" "$total_lines")"
+    scen_next="$(next_heading_line "$doc" "$scen_line" "$total_lines")"
+
+    # Wireframe paths declared in the Wireframes section (backticked, wireframes/*).
+    local declared_wfs
+    declared_wfs="$(awk -v s="$wf_line" -v e="$wf_next" 'NR > s && NR < e' "$doc" \
+      | grep -oE '`wireframes/[^`]+`' \
+      | sed 's/^`//;s/`$//' \
+      | sort -u \
+      || true)"
+
+    # Wireframe paths referenced in any scenario (also backticked).
+    local referenced_wfs
+    referenced_wfs="$(awk -v s="$scen_line" -v e="$scen_next" 'NR > s && NR < e' "$doc" \
+      | grep -oE '`wireframes/[^`]+`' \
+      | sed 's/^`//;s/`$//' \
+      | sort -u \
+      || true)"
+
+    # Every declared wireframe must be referenced by at least one scenario.
+    while IFS= read -r wf; do
+      [[ -z "$wf" ]] && continue
+      if ! echo "$referenced_wfs" | grep -qFx "$wf"; then
+        err "orphan_wireframe: '${wf}' declared in Wireframes but no scenario references it"
+      fi
+    done <<< "$declared_wfs"
+
+    # Every wireframe referenced in a scenario must be declared in Wireframes.
+    while IFS= read -r wf; do
+      [[ -z "$wf" ]] && continue
+      if ! echo "$declared_wfs" | grep -qFx "$wf"; then
+        err "orphan_scenario_wireframe: scenario references '${wf}' which is not declared in the Wireframes section"
+      fi
+    done <<< "$referenced_wfs"
+  fi
+
+  # ----------------------------------------------------------------
+  # Output
+  # ----------------------------------------------------------------
+  if [[ "${#ERRORS[@]}" -gt 0 ]]; then
+    for e in "${ERRORS[@]}"; do
+      echo "ERROR: $e" >&2
+    done
+    exit 1
+  fi
+}
+
+# ----------------------------------------------------------------
+# Argument parsing
+# ----------------------------------------------------------------
+if [[ $# -eq 0 ]]; then
+  usage
+fi
+
+MODE=""
+TARGET=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check)
+      MODE="check"
+      if [[ $# -lt 2 ]]; then
+        usage
+      fi
+      TARGET="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      ;;
+    *)
+      echo "ERROR: unknown argument: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+case "$MODE" in
+  check)
+    do_check "$TARGET"
+    ;;
+  *)
+    usage
+    ;;
+esac

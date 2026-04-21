@@ -38,6 +38,7 @@ uv
 uvx
 tcoder-test_*
 tcoder-settings
+validate-design
 validate-plan
 wc
 which

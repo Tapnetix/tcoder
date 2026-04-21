@@ -19,6 +19,10 @@ Dispatch a reviewer subagent to validate a design doc before planning. Catches s
 
 ## Dispatch
 
+**Stage 1: Structural validation** — run `validate-design --check {DESIGN_DOC}` first. This catches missing sections, bad ordering, empty headings, cross-reference mismatches, non-goal rationale length, and orphan wireframes/scenarios mechanically. If it reports errors, fix them and re-run before dispatching the LLM reviewer. **See:** `skills/design/design-spec.md` for the authoritative format.
+
+**Stage 2: Semantic review** — dispatch the LLM reviewer subagent.
+
 Gather inputs:
 - **Design doc** — `.claude/tcoder/YYYY-MM-DD-topic/design-topic.md`
 - **Repo root** — the worktree the design targets

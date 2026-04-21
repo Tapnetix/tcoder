@@ -62,7 +62,7 @@ Complete in order:
     **Agent teams fallback:** If user picks "Agent teams", check `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. If not `1`, use AskUserQuestion to explain: "Agent teams requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. To enable: run `echo 'export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1' >> ~/.zshrc && source ~/.zshrc`, then restart Claude Code." Offer: "Continue with subagents" or "Stop (I'll restart with agent teams)". If they choose subagents, override the Q2 answer to `Subagents` before step 11 writes plan.json. If they stop, tell them the exact command to resume: `claude --continue` in the worktree directory.
 
     On approval, create sentinel: `mkdir -p <plan-dir> && touch <plan-dir>/.design-approved`
-8. **Write design doc** — `.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.md` (no commit — gitignored transient state)
+8. **Write design doc** — `.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.md` (no commit — gitignored transient state). Follow **See:** `design-spec.md` for the authoritative section structure (8 always-required + 4 conditional sections, canonical order, cross-reference rules).
 
    Before dispatching design-review, verify the doc satisfies this quality checklist (catches the most common reviewer findings on first pass):
    - Success criteria are behavioral outcomes, not implementation details ("users can log in" not "tests pass" or "middleware installed")
@@ -70,10 +70,11 @@ Complete in order:
    - Every file mentioned in the implementation approach is covered in the architecture section (and vice versa)
    - Test impact is noted for every behavior change
    - Migration/operational steps are captured if the change touches data or config
-9. **Self-review pass** — before dispatching the external reviewer, read through the design doc yourself against the 8-point checklist in `agents/design-reviewer.md`. Fix any issues you find. Goal: catch obvious gaps so the external reviewer surfaces only non-obvious ones. This is an inline check, not a subagent dispatch — no output format required, just fix what you find.
-10. **Dispatch design-review subagent** — fresh reviewer agent validates design before planning (hard gate)
-11. **Dispatch draft-plan subagent** — fresh implementer agent with design doc path and worktree path (zero design context)
-12. **Route workflow** — Map step 7 choices to schema values:
+9. **Structural validation** — run `validate-design --check <path>` against the design doc. This catches mechanical issues (missing sections, bad ordering, empty headings, cross-reference mismatches, non-goal rationale length, orphan wireframes/scenarios) before the LLM reviewer burns context on them. Fix all errors before proceeding to self-review. Hard gate — planning will not proceed without it.
+10. **Self-review pass** — before dispatching the external reviewer, read through the design doc yourself against the checklist in `agents/design-reviewer.md`. Fix any issues you find. Goal: catch obvious gaps so the external reviewer surfaces only non-obvious ones. This is an inline check, not a subagent dispatch — no output format required, just fix what you find.
+11. **Dispatch design-review subagent** — fresh reviewer agent validates design before planning (hard gate)
+12. **Dispatch draft-plan subagent** — fresh implementer agent with design doc path and worktree path (zero design context)
+13. **Route workflow** — Map step 7 choices to schema values:
     - Workflow: `Create PR` → `pr-create`, `Merge PR` → `pr-merge`, `Direct merge` → `direct-merge`, `Plan only` → `plan-only`
     - Exec mode: `Subagents` → `subagents`, `Agent teams` → `agent-teams`
 
@@ -200,12 +201,4 @@ Use AskUserQuestion with "Looks good" / "Adjust phases" options.
 
 ## Design Doc Contents
 
-When writing the design doc (`.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.md`):
-- Sections in order: Problem, Goal, Success Criteria, Architecture, Key Decisions, Non-Goals, Implementation Approach
-- **Problem** — what's broken, who's affected, consequences of not solving
-- **Success Criteria** — human-verifiable behavioral statements (not "tests pass"); collectively complete (all pass = goal met), individually necessary
-- **Wireframes** (UI features only, per step 5b) — list each `wireframes/*.html` file with a one-line purpose. Presence of this section triggers the `.wireframes-approved` gate in `validate-plan --check-entry --stage draft-plan` and signals the plan drafter to write an `e2e` block.
-- **E2E Acceptance Scenarios** (present whenever Wireframes is) — one Given/When/Then scenario per wireframe behavior, each naming the wireframe it exercises. These become the assertions in the plan's `e2e-red` task.
-- **Test Coverage** (when `coverage_mode` != `off`) — coverage tool detected or "none (needs setup)", coverage command, baseline percentage or `null`, threshold from `coverage_threshold` setting. This section is consumed by the plan drafter to populate `coverage` in plan.json and generate a coverage-setup task if needed.
-- **E2E Tooling** (when `e2e_mode` != `off` and the feature has a Wireframes section) — name the E2E runner and command (e.g. `npx playwright test`). Consumed by the plan drafter to populate the `e2e.command` field in plan.json.
-- If multi-phase: **Implementation Approach** includes phase rationale
+Authoritative section list, canonical order, conditional-section triggers, and cross-reference rules live in **See:** `design-spec.md`. Run `validate-design --check <path>` (step 9) to enforce structure mechanically. Conditional sections to include based on context: **Wireframes** + **E2E Acceptance Scenarios** + **E2E Tooling** for UI features (per step 5b); **Test Coverage** when `coverage_mode != off`. For multi-phase features, Implementation Approach includes phase rationale.
