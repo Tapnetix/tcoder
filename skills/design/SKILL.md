@@ -19,9 +19,9 @@ A todo list, a utility function, a config change — all go through this process
 
 Complete in order:
 
-1. **Explore context** — files, docs, recent commits. Also run `COVERAGE_MODE=$(tcoder-settings get coverage_mode)`. If not `off`: detect whether the project has test coverage tooling configured (look for jest coverage config, pytest-cov/coverage.py, go test -cover, nyc/c8, etc.). Note findings: coverage command, current baseline percentage (run it if tooling exists), or "no coverage tooling — setup task needed". Run the equivalent probe for E2E: `E2E_MODE=$(tcoder-settings get e2e_mode)`; when not `off`, detect any existing E2E runner (Playwright, Cypress, Selenium, Vitest+jsdom) and note the command. This feeds into the design doc and plan.
-2. **Challenge assumptions** — question the framing before accepting it
-3. **Ask clarifying questions** — smart batches (see below)
+1. **Explore context** — files, docs, recent commits. Understand the codebase you're working in before asking the user anything.
+2. **Challenge assumptions** — question the framing like a senior PM before accepting it (see below)
+3. **Investigate and clarify** — ask questions one at a time to deeply understand the problem and requirements. Scale depth to scope (see below). This is the most important phase — rushing through it is the #1 cause of designs that miss the mark.
 4. **Propose 2-3 approaches** — trade-offs and your recommendation
 5. **Present design** — sections scaled to complexity, approval after each
 5b. **Wireframes (UI features only)** — produce proper UX wireframes as HTML+CSS under `<plan-dir>/wireframes/` and hard-gate on the user's explicit approval (sentinel `<plan-dir>/.wireframes-approved`) before planning. Also capture **E2E Acceptance Scenarios** in the design doc — one Given/When/Then per wireframe behavior — these drive the plan's `e2e-red` task. **See:** wireframes.md for the detection rule, file layout, approval loop, and tooling notes.
@@ -63,6 +63,9 @@ Complete in order:
 
     On approval, create sentinel: `mkdir -p <plan-dir> && touch <plan-dir>/.design-approved`
 8. **Write design doc** — `.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.md` (no commit — gitignored transient state). Follow **See:** `design-spec.md` for the authoritative section structure (8 always-required + 4 conditional sections, canonical order, cross-reference rules).
+
+   **Tooling detection (run now, not earlier — don't let this disrupt the conversation):**
+   Run `COVERAGE_MODE=$(tcoder-settings get coverage_mode)`. If not `off`: detect whether the project has test coverage tooling configured (jest coverage config, pytest-cov/coverage.py, go test -cover, nyc/c8, etc.). Note findings for the Test Coverage section. Run the equivalent probe for E2E: `E2E_MODE=$(tcoder-settings get e2e_mode)`; when not `off`, detect any existing E2E runner (Playwright, Cypress, Selenium, Vitest+jsdom).
 
    Before dispatching design-review, verify the doc satisfies this quality checklist (catches the most common reviewer findings on first pass):
    - Success criteria are behavioral outcomes, not implementation details ("users can log in" not "tests pass" or "middleware installed")
@@ -170,21 +173,43 @@ Extract the `json review-summary` block from the response. Triage issues (fix pl
 
 ## Challenging Assumptions
 
-Before clarifying questions, challenge the framing like a senior PM:
+Before clarifying questions, challenge the framing like a senior PM. Don't accept the first framing — push on it:
 
 - "What problem does this solve, and for whom?"
 - "What would users actually do with this?"
-- "Is there a simpler alternative?"
+- "Is there a simpler alternative that gets 80% of the value?"
+- "What happens if we don't build this?"
 
 **Example:** User: "All users should have public pages." Challenge: "A public page needs content to show. What would a non-creator put there?" — may surface that the feature isn't needed yet.
 
-## Smart Question Batching
+## Asking Questions
 
-- **Text questions** (word-described choices): batch up to 4 per AskUserQuestion
-- **Visual questions** (need ASCII mockups): one at a time, use `markdown` preview
-- Text first, visual last
-- Each question gets its own options — never "all correct / not correct" toggles
-- Ambiguous concepts: explain the difference, offer interpretations as options
+This is a conversation, not a form. The goal is to understand deeply before proposing anything.
+
+- **One question at a time** — don't overwhelm. If a topic needs more exploration, break it into follow-up questions across multiple turns. Each question gets its own AskUserQuestion.
+- **Multiple choice preferred** — offer 2-4 discrete options when possible. Easier to answer than open-ended, and forces you to think through the option space. Include an "Other" escape hatch.
+- **Follow the thread** — when the user's answer reveals something interesting or unexpected, follow up on that before moving to the next topic. The best design insights come from the second or third follow-up, not the first question.
+- **Visual questions** (layout, flow, UI behavior): one at a time. For simple cases, inline markdown diagrams suffice. For UX-heavy features, produce proper HTML+CSS wireframes (step 5b) — text-based mockups can't capture interaction flow, spacing, or responsive behavior.
+- **Ambiguous concepts**: explain the difference between interpretations, offer them as options
+
+## Depth Scaling
+
+Match investigation depth to feature scope. Don't spend 10 questions on a config change, but don't rush a multi-service architecture change in 3.
+
+**Small scope** (config change, utility function, single-file fix): 2-4 questions. Focus on: what exactly, any edge cases, how to test.
+
+**Medium scope** (new feature, new component, API endpoint): 5-8 questions. Also explore: who uses it and how, error handling strategy, interaction with existing code, performance constraints.
+
+**Large scope** (multi-service change, new subsystem, architectural shift): 8-15+ questions. Also investigate:
+- Read relevant existing code in depth before asking — understand current patterns, abstractions, and pain points
+- Failure modes and recovery strategies
+- Migration path from current state
+- Impact on existing consumers/APIs
+- Data model implications
+- Operational concerns (monitoring, rollback, deployment)
+- Security boundaries affected
+
+For large scope: don't just ask the user — also investigate the codebase yourself between questions. Read the modules you'll be touching, trace call paths, check test coverage. Bring what you learn back to the user: "I looked at the auth module and noticed it uses middleware chaining — should we follow that pattern or is this a chance to improve it?"
 
 ## Presenting the Design
 
