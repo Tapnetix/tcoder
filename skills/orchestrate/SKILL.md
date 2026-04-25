@@ -19,6 +19,26 @@ Execute plans via the configured execution mode. Phases run sequentially; task d
 | `./dispatch-subagents.md` | Subagents dispatch protocol |
 | `./dispatch-agent-teams.md` | Agent teams dispatch protocol |
 
+## Output Discipline
+
+The task list is the user's progress display — your free text scrolls it off screen. Stay quiet between events; let TaskUpdate tell the story.
+
+**Don't emit narration text for:**
+- "Dispatching implementer for X" — TaskUpdate to in_progress already says this
+- "Agent X completed" — TaskUpdate to completed already says this
+- "Waiting on A1, A2, A3" — visible in the in_progress tasks
+- "Merged X into Y" — internal plumbing, user doesn't need it
+- Mid-loop status restatements ("still working on phase A...")
+
+**Do emit a short text line for:**
+- A user decision is needed (AskUserQuestion follows immediately)
+- An unrecoverable failure that halts the workflow
+- A non-obvious deviation from the plan that the user should know about
+
+**Push detail into the task list, not chat.** When a review finds actionable issues, don't write "A1 review: 2 issues (1 medium + 1 low). #1 is real — reset test doesn't seed a photo first. #2 is environmental — dismiss." Instead, TaskUpdate the A1 tracking item's description with the same content. The user sees it in the list; the list stays on screen.
+
+**Default to silence between TaskUpdates.** A turn with only tool calls (TaskUpdate, Agent, Bash) and no user-facing text is fine and often correct.
+
 ## Progress Tracking
 
 The task list is the user's primary visibility into orchestration. A sparse list (one item per phase) hides what's running. Be granular: one tracking task per actual unit of work, with descriptive subjects that tell the user what "done" looks like.
