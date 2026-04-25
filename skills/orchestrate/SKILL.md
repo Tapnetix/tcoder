@@ -21,7 +21,31 @@ Execute plans via the configured execution mode. Phases run sequentially; task d
 
 ## Progress Tracking
 
-TaskCreate per phase: "Execute tasks ({N})", "Implementation review", "Create PR". Final: "Mark plan complete". Set `addBlockedBy`. Mark `in_progress` / `completed` as you go.
+The task list is the user's primary visibility into orchestration. A sparse list (one item per phase) hides what's running. Be granular: one tracking task per actual unit of work, with descriptive subjects that tell the user what "done" looks like.
+
+### When to TaskCreate
+
+At orchestrate startup, after reading plan.json, create the full tracking skeleton in a single batch. One TaskCreate per:
+
+- **Each implementation task in plan.json** — subject: `{TASK_ID}: {name} — {done_when}` (truncate done_when to ~60 chars). activeForm: `Implementing {TASK_ID}`. One per task in `.phases[].tasks[]`.
+- **Each phase's implementation review** — subject: `Review phase {LETTER} — cross-task issues, coverage`. activeForm: `Reviewing phase {LETTER}`.
+- **Each phase's coverage gate** (when `COVERAGE_MODE` is `enforce` and `COVERAGE_CMD` is set) — subject: `Coverage gate — phase {LETTER} ≥{COVERAGE_THRESHOLD}%`. activeForm: `Checking coverage`.
+- **Final review** (multi-phase only) — subject: `Final cross-phase review`. activeForm: `Final review`.
+- **PR step** (when workflow is not `plan-only`) — subject mirrors workflow: `Create PR`, `Create PR + merge`, or `Direct merge`. activeForm: matching present-continuous form.
+- **Mark plan complete** — subject: `Mark plan complete`. activeForm: `Finalizing`.
+
+Set `addBlockedBy` to enforce ordering: phase B's tasks block on phase A's review; reviews block on all their phase's tasks; the PR step blocks on the final review.
+
+### When to TaskUpdate
+
+- **Dispatching an implementer** → TaskUpdate to `in_progress` for that task's tracking item. When dispatching multiple implementers in parallel, mark all of them in_progress in the same turn (one TaskUpdate per task).
+- **Review passes for a task** → TaskUpdate to `completed`. If a review fix cycle runs, the task stays `in_progress` until the final review pass.
+- **Implementation review starts** → TaskUpdate the review tracking item to `in_progress`. After verdict pass → `completed`.
+- **Coverage gate, PR step, plan completion** — same in_progress / completed pattern.
+
+### Why this matters
+
+The user can't see subagent activity without TaskUpdate. A 5-task phase running 5 parallel implementers should show 5 `in_progress` items in the task list — that's what makes the orchestrator look alive. Sparse tracking (one task per phase) collapses 5 visible work items into 1, masking what's actually happening.
 
 ## Setup
 
@@ -46,6 +70,7 @@ Note: These model settings are substituted into dispatch template variables `{TA
 - `PLAN_BASE_SHA=$(git rev-parse HEAD)`
 - `[ -f "$PLAN_DIR/reviews.json" ] || echo '[]' > "$PLAN_DIR/reviews.json"`
 - Push branch: `git push -u origin HEAD`
+- **Build tracking skeleton** — TaskCreate one entry per implementation task, per phase review, per phase coverage gate (when applicable), the final review (multi-phase), the PR step, and the plan-complete step. See **Progress Tracking** above for subjects, activeForms, and dependency wiring. Send all TaskCreate calls in a single batch.
 - Read the dispatch protocol for `EXEC_MODE`: **See:** `./dispatch-subagents.md` (subagents) or `./dispatch-agent-teams.md` (agent-teams) — read only the file matching `EXEC_MODE`
 
 ## Per-Phase Execution (Sequential)
@@ -84,10 +109,10 @@ When `E2E_MODE=advisory`, violations are reported in completion notes but don't 
 ### Phase Wrap-Up
 
 After all tasks complete and branches merged:
-1. Dispatch implementation-review with `PHASE_BASE_SHA..HEAD` using `model: "$IMPL_REVIEWER_MODEL"`, run Review Loop Protocol (scope: `phase-{letter_lower}`)
+1. TaskUpdate the phase's review tracking item to `in_progress`. Dispatch implementation-review with `PHASE_BASE_SHA..HEAD` using `model: "$IMPL_REVIEWER_MODEL"`, run Review Loop Protocol (scope: `phase-{letter_lower}`). On verdict pass, TaskUpdate the review tracking item to `completed`.
 2. `validate-plan --check-review "$PLAN_JSON" --type impl-review --scope phase-{letter_lower}`
 3. Append review changes to `${PHASE_DIR}/completion.md`
-4. **Coverage gate** (when `COVERAGE_MODE` is `enforce` and `COVERAGE_CMD` is set): Run the coverage command and verify the result meets `COVERAGE_THRESHOLD`. If coverage has regressed below the threshold, dispatch an implementer to add missing tests before proceeding. Log coverage percentage in `${PHASE_DIR}/completion.md`.
+4. **Coverage gate** (when `COVERAGE_MODE` is `enforce` and `COVERAGE_CMD` is set): TaskUpdate the coverage tracking item to `in_progress`. Run the coverage command and verify the result meets `COVERAGE_THRESHOLD`. If coverage has regressed below the threshold, dispatch an implementer to add missing tests before proceeding. Log coverage percentage in `${PHASE_DIR}/completion.md`. TaskUpdate to `completed` once threshold is met.
 5. Run phase criteria: `validate-plan --criteria "$PLAN_JSON" --phase {LETTER}`
 6. Update status: `validate-plan --update-status "$PLAN_JSON" --phase {LETTER} --status "Complete (YYYY-MM-DD)"`
 7. (Multi-phase) Create phase PR, external review gate, merge, clean up worktree
@@ -116,21 +141,23 @@ Skip integration branch and phase worktrees. Work directly in the feature worktr
 3. `validate-plan --check-review "$PLAN_JSON" --type impl-review --scope phase-a`
 4. Run plan criteria: `validate-plan --criteria "$PLAN_JSON" --plan`
 5. `validate-plan --update-status "$PLAN_JSON" --plan --status Complete`
-6. Route on workflow:
+6. Route on workflow (TaskUpdate the PR tracking item to `in_progress` before invoking, `completed` after):
    - `"pr-create"`: invoke pr-create (targets main), `validate-plan --check-workflow "$PLAN_JSON"`, stop
    - `"pr-merge"`: invoke pr-create, read `REVIEW_WAIT=$(tcoder-settings get review_wait_minutes)`, poll checks + pr-review --automated (skip if $REVIEW_WAIT is 0; if skipped, invoke pr-merge directly), `validate-plan --check-workflow "$PLAN_JSON"`
    - `"direct-merge"`: follow the **Direct Merge Protocol** below instead of creating a PR, then `validate-plan --check-workflow "$PLAN_JSON"`
+7. TaskUpdate the "Mark plan complete" tracking item to `completed`.
 
 ## After All Phases (Multi-Phase Only)
 
 1. Run plan criteria: `validate-plan --criteria "$PLAN_JSON" --plan`. If exit 1, do not mark complete.
-2. Final review: dispatch implementation-review with `PLAN_BASE_SHA..HEAD`, run Review Loop Protocol (scope: `final`)
+2. TaskUpdate the "Final cross-phase review" tracking item to `in_progress`. Dispatch implementation-review with `PLAN_BASE_SHA..HEAD`, run Review Loop Protocol (scope: `final`). On verdict pass, TaskUpdate to `completed`.
 3. `validate-plan --check-review "$PLAN_JSON" --type impl-review --scope final`
 4. `validate-plan --update-status "$PLAN_JSON" --plan --status Complete`
-5. Route on workflow:
+5. Route on workflow (TaskUpdate the PR tracking item to `in_progress` before invoking, `completed` after):
    - `"pr-merge"`: create final PR, poll checks, pr-review --automated, `validate-plan --check-workflow "$PLAN_JSON"`, clean up
    - `"pr-create"`: create final PR, `validate-plan --check-workflow "$PLAN_JSON"`, stop
    - `"direct-merge"`: follow the **Direct Merge Protocol** below (operate on the integration branch), `validate-plan --check-workflow "$PLAN_JSON"`, clean up
+6. TaskUpdate the "Mark plan complete" tracking item to `completed`.
 
 **Continuity:** Run continuously. Pause only for Rule 4 violations.
 

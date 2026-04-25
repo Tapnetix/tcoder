@@ -11,6 +11,8 @@ git worktree add .claude/worktrees/{TASK_ID_LOWER} -b {TASK_ID_LOWER} HEAD
 TASK_METADATA=$(jq -c --arg id "{TASK_ID}" '[.phases[].tasks[] | select(.id == $id)][0] | del(.status)' "$PLAN_JSON")
 ```
 
+Before dispatching, mark each ready task's tracking item `in_progress` via TaskUpdate (one per task) so the user sees parallel work in the task list.
+
 Then dispatch **all ready implementers in a single message** with multiple Agent tool calls — one per task. Splitting them across turns breaks parallelism and forces cache reloads for each agent.
 
 ```text
@@ -72,8 +74,9 @@ For trivial tasks (one-liner, config change, rename) where a full reviewer dispa
    - Merge: `git -C <your worktree path> merge <agent-branch>`
    - Clean up: `git worktree remove <agent-worktree-path>` then `git branch -d <agent-branch>`
    - Reset CWD after removal: `cd <feature-worktree-path> && pwd` — run this after every worktree removal even if you believe CWD hasn't drifted
-5. Check if dependent tasks are now unblocked (`validate-plan --check-deps`)
-6. Dispatch newly unblocked tasks (same pattern as above)
+5. TaskUpdate this task's tracking item to `completed`
+6. Check if dependent tasks are now unblocked (`validate-plan --check-deps`)
+7. Dispatch newly unblocked tasks (same pattern as above)
 
 ## Key Differences from Agent Teams
 
