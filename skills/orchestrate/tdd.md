@@ -38,6 +38,18 @@ def test_auth_service_fetches_user_from_repository():
     assert result.user_id == expected_id
 ```
 
+## E2E TDD
+
+When a task carries `e2e_scenarios`, the spec file is part of the TDD cycle — the same red-green-refactor loop applies, with the spec as the failing test. Each task owns exactly one spec file at the deterministic path `<e2e.spec_dir>/<task_id_lower><ext>` (the orchestrator supplies the resolved path in dispatch metadata; do not derive it yourself).
+
+Cycle:
+
+1. **Red.** Write the spec asserting every scenario in `e2e_scenarios`. Each test name starts with `S<n>:` exactly — for example `test('S1: user signs in', ...)` (playwright/vitest) or `def test_S1_user_signs_in():` (pytest). Run the per-runner filtered command supplied in dispatch and verify every assertion fails. No implementation yet.
+2. **Green.** Implement the feature. Re-run the same filtered command and verify every assertion passes.
+3. **Refactor.** Optional, same as for unit tests. Commit only when green — the green run must be visible in commit history because the reviewer checks for it.
+
+The filter form is runner-specific (`--grep`/`-t`/`-k`/`--spec`); see the runner/filter table in `skills/orchestrate/SKILL.md`. Each task's spec is independent — never edit another task's spec to make your tests pass; that's a Rule 4 escalation.
+
 ## Common Failure Modes
 
 | Failure | Fix |
