@@ -115,6 +115,18 @@ echo "Test 14f: Scenario Allocation duplicate labels passes (info only)"
 assert_pass "scenario-allocation duplicate labels passes" \
   "$VALIDATE" --check "$FIXTURES/scenario-allocation/duplicate-label.md"
 
+echo "Test 14g: Scenario Allocation duplicate scenario id fails"
+assert_fail "duplicate_scenario_id detected" "duplicate_scenario_id" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/duplicate-scenario-id.md"
+
+echo "Test 14h: Scenario Allocation duplicate allocation id fails"
+assert_fail "duplicate_allocation_id detected" "duplicate_allocation_id" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/duplicate-allocation-id.md"
+
+echo "Test 14i: Scenario Allocation missing allocation for scenario fails"
+assert_fail "missing_allocation_for_scenario detected" "missing_allocation_for_scenario" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/missing-allocation.md"
+
 echo "Test 14: No args exits with usage"
 if "$VALIDATE" > /dev/null 2>&1; then
   echo "FAIL: no args should exit non-zero"

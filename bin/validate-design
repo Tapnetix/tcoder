@@ -325,9 +325,8 @@ do_check() {
       local seen_scenarios=""
       while IFS= read -r tok; do
         [[ -z "$tok" ]] && continue
-        # Trim trailing punctuation (colon, asterisks).
-        tok="${tok%%:*}"
-        tok="${tok%%\**}"
+        # Trim trailing punctuation (colon, asterisks, periods, parens, etc.).
+        tok="${tok%%[!A-Za-z0-9]*}"
         if [[ ! "$tok" =~ ^S[0-9]+$ ]]; then
           err "malformed_scenario_id: scenario id '${tok}' does not match ^S[0-9]+$"
           continue
