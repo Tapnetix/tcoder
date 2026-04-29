@@ -29,7 +29,7 @@ You are working in an isolated git worktree. All code changes, file creation, an
 
 If your task metadata includes a non-empty `e2e_scenarios` array, the TDD cycle expands to cover the spec file you own. The implementer authors the spec for the behaviour it is about to build — there is no upfront red-spec task; the per-task gate runs as part of your own red/green discipline.
 
-1. Compute the deterministic spec path: `<e2e.spec_dir>/<task_id_lower>.<ext>`, where `<ext>` derives from `e2e.runner` (playwright/vitest → `spec.ts`, cypress → `cy.ts`, pytest → `_test.py`). This path is the only spec file you may create.
+1. Compute the deterministic spec path: `<e2e.spec_dir>/<task_id_lower><ext>`, where `<ext>` derives from `e2e.runner`: playwright/vitest → `.spec.ts`, cypress → `.cy.ts`, pytest → `_test.py`. Examples for task A1 in `e2e/`: playwright → `e2e/a1.spec.ts`, pytest → `e2e/a1_test.py`. This path is the only spec file you may create.
 2. Write the spec file. Each test name must be prefixed with its scenario ID so runners can filter by name (e.g., `test('S1: user opens a markdown file', ...)` for playwright/vitest, equivalent shapes for cypress/pytest).
 3. Run the per-runner filtered E2E command provided in the task brief — `--grep "S1\|S2"` for playwright, `-t "S1\|S2"` for vitest, `-k "S1 or S2"` for pytest, `--spec <path>` for cypress. Verify it FAILS.
 4. Implement the feature so the scenarios pass.

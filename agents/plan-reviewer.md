@@ -76,7 +76,7 @@ For multi-task plans with cross-task data flow:
 
 **E2E checks** (when plan.json has an `e2e` object — structural constraints already enforced by `--schema`):
 - Every scenario in the design doc's E2E Acceptance Scenarios section is allocated to exactly one task per the design's Scenario Allocation table, and that task's `e2e_scenarios` array carries the matching scenario id
-- The owning task's prose describes writing a failing spec at the deterministic path `<e2e.spec_dir>/<task_id_lower>.<ext>` with scenario-id-prefixed test names, running the per-runner filtered command to verify red, implementing, re-running to verify green, and committing
+- The owning task's prose describes writing a failing spec at the deterministic path `<e2e.spec_dir>/<task_id_lower><ext>` (where `<ext>` is `.spec.ts` for playwright/vitest, `.cy.ts` for cypress, `_test.py` for pytest) with scenario-id-prefixed test names, running the per-runner filtered command to verify red, implementing, re-running to verify green, and committing
 - `e2e.command` is runnable for the project's stack (validate-plan derives the spec-files list from per-task fields, so no separate enumeration check applies here)
 - Flag: scenario from design doc with no owning task (or owned by more than one task)
 - Flag: a task with `e2e_scenarios` does not describe writing the spec, verifying it fails, and re-running for green

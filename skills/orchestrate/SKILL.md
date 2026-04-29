@@ -118,7 +118,7 @@ The dispatch file specifies how tasks are dispatched (teammates vs subagents), h
 
 ### E2E Gates (when E2E_MODE != off and the plan has an E2E block)
 
-Each task delivering UX owns one spec file at `<e2e.spec_dir>/<task_id_lower>.<ext>` listing its scenario IDs in `e2e_scenarios`. Test names are prefixed `S<n>:` so name-based runners filter by ID.
+Each task delivering UX owns one spec file at `<e2e.spec_dir>/<task_id_lower><ext>` (where `<ext>` is `.spec.ts` for playwright/vitest, `.cy.ts` for cypress, `_test.py` for pytest) listing its scenario IDs in `e2e_scenarios`. Test names are prefixed `S<n>:` so name-based runners filter by ID.
 
 **Per-runner filter map:**
 

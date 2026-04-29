@@ -12,7 +12,7 @@ background: true
 You are reviewing a single task's implementation.
 You have not seen the implementation rationale — evaluate the code cold.
 
-## 9-Point Checklist
+## 8-Point Checklist
 
 Work through each systematically. This review covers single-task
 concerns only — cross-task issues (inconsistencies, duplication,
@@ -74,7 +74,7 @@ Check boundary code (inputs, outputs, external calls).
 - Flag: Missing input validation at boundary with specific attack vector
 - Flag: Hardcoded secret or credential
 
-### 7. Coverage Gate
+### 6. Coverage Gate
 **Skip this check if no coverage context is provided in the invocation prompt.**
 
 When coverage context is present (`COVERAGE_MODE`, `COVERAGE_CMD`, `COVERAGE_THRESHOLD`):
@@ -88,7 +88,7 @@ When coverage context is present (`COVERAGE_MODE`, `COVERAGE_CMD`, `COVERAGE_THR
 - Flag: Coverage command failed to run (misconfigured tooling)
 - Flag: New code paths with zero test coverage
 
-### 8. Simplicity
+### 7. Simplicity
 Evaluate against codebase conventions.
 
 - Follows existing patterns in the codebase
@@ -100,11 +100,11 @@ Evaluate against codebase conventions.
 - Flag: Feature not in the task spec (YAGNI)
 - Flag: Naming inconsistent with codebase conventions
 
-### 9. E2E Gate (when `e2e_scenarios` is set)
+### 8. E2E Gate (when `e2e_scenarios` is set)
 **Skip this check when the task metadata's `e2e_scenarios` array is empty or absent.**
 
 When `e2e_scenarios` is non-empty:
-- Verify the spec file at `<e2e.spec_dir>/<task_id_lower>.<ext>` (where `<ext>` derives from `e2e.runner`: playwright/vitest → `spec.ts`, cypress → `cy.ts`, pytest → `_test.py` suffix) was created in the diff
+- Verify the spec file at `<e2e.spec_dir>/<task_id_lower><ext>` (where `<ext>` derives from `e2e.runner`: playwright/vitest → `.spec.ts`, cypress → `.cy.ts`, pytest → `_test.py`) was created in the diff
 - Open the spec file and confirm every test name starts with one of the scenario IDs (`S1:`, `S2:`, etc. for playwright/vitest/cypress; `test_S1_*` for pytest)
 - Inspect commit history: at least one commit in the diff range must show a successful run of the per-runner filtered command (the implementer commits on green)
 - Severity depends on `e2e_mode`:
@@ -120,7 +120,7 @@ When `e2e_scenarios` is non-empty:
 ### Issues Found
 
 For each issue:
-- **Check** (1-9)
+- **Check** (1-8)
 - **File:line**
 - **Problem** (specific)
 - **Suggested fix**
@@ -173,7 +173,7 @@ Rules for the summary block:
 - `verdict`: "pass" when zero issues remain actionable, "fail" otherwise
 - `issues_found`: total count (including low/informational)
 - `severity`: counts per level (critical, high, medium, low)
-- `issues[]`: one entry per issue with id (sequential integer), severity, category (from 9-point checklist), file (path:line or "N/A"), problem, fix
+- `issues[]`: one entry per issue with id (sequential integer), severity, category (from 8-point checklist), file (path:line or "N/A"), problem, fix
 - If zero issues: `{"issues_found": 0, "severity": {"critical": 0, "high": 0, "medium": 0, "low": 0}, "verdict": "pass", "issues": []}`
 - This block must be the LAST fenced code block in your response — the controller uses the last `json review-summary` block if multiple appear
 

@@ -43,7 +43,7 @@ Hunt for issues that span task boundaries:
 
 9. **E2E Red→Green Arc** (skip when plan.json has no `e2e` block)
    Verify per-task double-loop TDD was honored across the diff range:
-   - For every task with a non-empty `e2e_scenarios` array, the deterministic spec file at `<e2e.spec_dir>/<task_id_lower>.<ext>` was created within that task's commit range and not modified afterward by any other task.
+   - For every task with a non-empty `e2e_scenarios` array, the deterministic spec file at `<e2e.spec_dir>/<task_id_lower><ext>` (where `<ext>` derives from `e2e.runner`: playwright/vitest → `.spec.ts`, cypress → `.cy.ts`, pytest → `_test.py`) was created within that task's commit range and not modified afterward by any other task.
    - Each such task's commit history shows a green run of the per-runner filtered command for its scenarios.
    - Running `e2e.command` at HEAD exits zero and every scenario in `e2e.scenarios` is reported as passed.
    - Severity depends on `E2E_MODE`: `enforce` → below = **Critical**; `advisory` → below = **Moderate**.
