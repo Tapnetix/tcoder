@@ -46,7 +46,7 @@ Write implementation plans assuming the executor has zero codebase context. Docu
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "status": "Not Yet Started",
   "workflow": "pr-create",
   "execution_mode": "subagents",
@@ -89,14 +89,13 @@ Optional: `success_criteria` at plan/phase/task levels. `workflow`: `pr-create` 
 
 If baseline is `null` (no coverage tooling), make the first task in the first phase a coverage-setup task: configure the project's test framework for coverage reporting, run the command, and verify it produces output. Subsequent tasks include a coverage verification step after the TDD green phase: run the coverage command scoped to the task's touched files and verify coverage meets the threshold.
 
-**E2E (double-loop TDD):** When the design doc has a **Wireframes** section (UI feature) and `e2e_mode` != `off`, populate the `e2e` object in plan.json and structure tasks to enforce RED-before-impl / GREEN-after:
-- `command`: E2E runner from the design doc's E2E Tooling section (e.g., `npx playwright test`)
-- `spec_files`: list of E2E spec files, one per wireframe/flow
-- `scenarios`: Given/When/Then scenarios from the design doc (mirror 1:1)
+**E2E (task-scoped scenarios):** When the design doc has a **Wireframes** section (UI feature), a `## Scenario Allocation` table, and `e2e_mode` != `off`, populate the `e2e` block and distribute scenarios across implementation tasks:
+- `command`: full E2E suite invocation from the design's E2E Tooling section (e.g., `npx playwright test`).
+- `runner`: one of `playwright`, `vitest`, `cypress`, `pytest` — drives the spec-file extension and the per-runner filter form.
+- `spec_dir`: directory holding all task-owned spec files (default `e2e/`).
+- `scenarios`: the design's scenarios mirrored 1:1, each with an `id` (`S1`, `S2`, …) and `name`.
 
-Task structure becomes mandatory:
-- **First task of first phase** has `kind: "e2e-red"`. It writes ALL spec files (every `spec_files` path appears in its `files.create`), asserts every scenario, and commits — they must FAIL when run (no implementation exists yet). No other task may create or modify any spec file.
-- **Last task of last phase** has `kind: "e2e-green"`. It runs the E2E suite and asserts every scenario now PASSES. `files.create` and `files.modify` must be empty — it's a verification task, not a code-editing task. `validate-plan --schema` enforces these constraints structurally.
+For each row of the design's Scenario Allocation table: copy the label verbatim into the owning task's `name`, and assign the corresponding scenario id(s) to that task's `e2e_scenarios` array. The validator enforces label-to-name match and one-owner-per-scenario, and derives the deterministic spec path `<spec_dir>/<task_id_lower><ext>` for each owning task — that path must appear in the task's `files.create`. Tasks without `e2e_scenarios` may not touch any path under `spec_dir`.
 
 **See:** `schema-reference.md` for full schema reference.
 

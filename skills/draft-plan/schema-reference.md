@@ -32,7 +32,7 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "status": "Not Yet Started",
   "goal": "One sentence",
   "architecture": "2-3 sentences",
@@ -44,9 +44,10 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
   },
   "e2e": {
     "command": "npx playwright test",
-    "spec_files": ["tests/e2e/login.spec.ts", "tests/e2e/dashboard.spec.ts"],
+    "runner": "playwright",
+    "spec_dir": "e2e/",
     "scenarios": [
-      {"name": "user signs in and lands on dashboard", "wireframe": "wireframes/01-login.html"}
+      {"id": "S1", "name": "user signs in and lands on dashboard"}
     ]
   },
   "success_criteria": [
@@ -72,11 +73,12 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
       "tasks": [
         {
           "id": "A1",
-          "name": "Setup route handlers",
+          "name": "user signs in and lands on dashboard",
           "status": "pending",
           "depends_on": [],
+          "e2e_scenarios": ["S1"],
           "files": {
-            "create": ["src/routes.ts"],
+            "create": ["e2e/a1.spec.ts", "src/routes.ts"],
             "modify": [],
             "test": ["tests/routes.test.ts"]
           },
@@ -98,17 +100,29 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
 
 **Field reference:**
 
-- `schema` (integer, required): Schema version for forward compatibility.
+- `schema` (integer, required): Schema version. Current value is `2`. Schema-1 plans are still accepted by the validator iff they carry no `kind` fields on any task — a schema-1 plan with even one `kind` is rejected with a single error pointing to the new model.
 - `status` (string, required): `Not Yet Started` | `In Development` | `Complete`.
 - `workflow` (string, required): `pr-create` | `pr-merge` | `direct-merge` | `plan-only`. Controls the post-implementation delivery path. `direct-merge` fast-forward merges the feature branch into `main` locally and asks before pushing — use only when branch protection doesn't require PRs.
 - `coverage` (object, optional): Present when `coverage_mode` setting is not `off`. Captures the project's test coverage configuration so implementers and reviewers can measure coverage consistently.
   - `command` (string, required): Shell command that produces a text coverage report (e.g., `npx jest --coverage --coverageReporters=text`).
   - `threshold` (integer, required): Minimum coverage percentage for touched files (from `coverage_threshold` setting).
   - `baseline` (integer or null, required): Project-wide coverage percentage measured before implementation begins. `null` if the project had no coverage tooling and a setup task will establish it.
-- `e2e` (object, optional): Present when the design has a Wireframes section and `e2e_mode` is not `off`. Drives double-loop TDD — the plan must contain exactly one `e2e-red` task (creates failing specs before impl) and exactly one `e2e-green` task (verifies specs pass after impl).
-  - `command` (string, required): Shell command that runs the full E2E suite (e.g., `npx playwright test`). Non-empty.
-  - `spec_files` (array of strings, required): Paths to E2E spec files, one per wireframe/flow. Non-empty. Each path must appear in the `e2e-red` task's `files.create`, and in no other task's `files.create` or `files.modify`.
-  - `scenarios` (array of objects, required): Given/When/Then scenarios mirrored from the design doc's E2E Acceptance Scenarios section. Non-empty. Each scenario has `name` and optionally `wireframe` (path to the wireframe file it exercises).
+- `e2e` (object, optional): Present when the design has a Wireframes section and `e2e_mode` is not `off`. Drives double-loop TDD via task-scoped scenario ownership — every scenario is owned by exactly one implementation task whose `e2e_scenarios` array references it, and that task creates the deterministic spec file at `<spec_dir>/<task_id_lower><ext>`.
+  - `command` (string, required): Shell command that runs the full E2E suite (e.g., `npx playwright test`). Non-empty. The orchestrator dispatches this verbatim for full-suite runs and constructs filtered variants for per-task and phase-end gates.
+  - `runner` (string, required): One of `playwright`, `vitest`, `cypress`, `pytest`. Drives both the deterministic spec-path extension and the per-runner scenario-filter form. Unknown runners are rejected at schema time.
+  - `spec_dir` (string, optional, default `"e2e/"`): Directory holding all task-owned spec files. The deterministic path is `<spec_dir>/<task_id_lower><ext>`.
+  - `scenarios` (array of objects, required): Given/When/Then scenarios mirrored 1:1 from the design doc's Scenario Allocation. Non-empty. Each entry has `id` (string matching `^S\d+$`, unique within the array) and `name` (the design label, copied verbatim into the owning task's `name` field). Optional `wireframe` (path) is allowed for cross-reference.
+  - `spec_files` is no longer authored. The validator derives `<spec_dir>/<task_id_lower><ext>` for every task owning scenarios; if a stale `spec_files` array remains in plan.json and disagrees with the derived list, the validator emits a `WARN: stale_e2e_spec_files` warning (not an error) and the field may be deleted.
+
+Runner-driven derivation:
+
+| Runner | Spec extension | Filter form |
+|---|---|---|
+| playwright | `.spec.ts` | `--grep "S1\|S2"` |
+| vitest | `.spec.ts` | `-t "S1\|S2"` |
+| cypress | `.cy.ts` | `--spec <path>` (per-file; works because each task owns one spec) |
+| pytest | `_test.py` | `-k "S1 or S2"` |
+
 - `success_criteria` (array, optional): Plan-level criteria. Fields stay in the schema for forward compatibility but are not programmatically enforced yet (see Deferred: Success Criteria Runner).
   - `run` (string, required): Shell command to execute. Must be non-empty.
   - `expect_exit` (integer, optional): Expected exit code.
@@ -120,7 +134,13 @@ Plans are currently single `.md` files where all structure (phases, tasks, statu
 - `phases[].status` (string, required): `Not Started` | `In Progress` | `Complete (YYYY-MM-DD)`.
 - `phases[].success_criteria` (array, optional): Phase-level criteria. Same structure as plan-level. Not enforced yet.
 - `phases[].tasks[].status` (string, required): `pending` | `in_progress` | `complete` | `skipped`.
-- `phases[].tasks[].kind` (string, optional): `e2e-red` | `e2e-green` when the plan has an `e2e` block; omitted for regular implementation tasks. Structural constraints enforced by `--schema`: `e2e-red` must be the first task of the first phase and create every `e2e.spec_files` entry; `e2e-green` must be the last task of the last phase and have empty `files.create`/`files.modify`. No other task may create or modify any `e2e.spec_files` path.
+- `phases[].tasks[].e2e_scenarios` (array of strings, optional): Scenario ids from `e2e.scenarios` that this task owns. When non-empty:
+  - The plan MUST have an `e2e` block (validator rejects `e2e_scenarios_without_block` otherwise).
+  - The task's `files.create` MUST include the deterministic spec path `<e2e.spec_dir>/<task_id_lower><ext>` (extension comes from `e2e.runner`).
+  - Each referenced id MUST exist in `e2e.scenarios` and MUST NOT be claimed by any other task — every scenario has exactly one owner across the plan.
+  - The task's `name` is expected to match a Scenario Allocation label from the design doc verbatim.
+
+  Tasks WITHOUT `e2e_scenarios` may not create or modify any path under `e2e.spec_dir` — the spec directory is task-scoped and the validator flags `e2e_spec_contamination` on stray writers.
 - `phases[].tasks[].depends_on` (array of strings): Task IDs this task consumes output from. Must reference same or prior phase only.
 - `phases[].tasks[].files` (object, required): `create`, `modify`, `test` — arrays of file paths. File paths must be unique across all tasks in the plan (duplicate creates are a bug).
 - `phases[].tasks[].success_criteria` (array, optional): Task-level criteria. Same structure. Not enforced yet.
@@ -202,6 +222,31 @@ Stub created by draft-plan (empty file). Written by the dispatcher after all pha
 ```
 
 Implementation review changes are appended here by the orchestrator.
+
+### reviews.json (Gate Records)
+
+A sibling file at `{PLAN_DIR}/reviews.json` records verdicts from each gate the orchestrator runs. The file is append-only — entries are added, never edited. The plan-entry validator reads it via `validate-plan --check-entry` to confirm prior-stage gates passed.
+
+**E2E gate record shape** (written after per-task and phase-end E2E gates):
+
+```json
+{
+  "type": "e2e-gate",
+  "scope": "task",
+  "task_id": "A2",
+  "phase": "A",
+  "scenarios": ["S1", "S2"],
+  "command": "npx playwright test --grep \"S1|S2\"",
+  "verdict": "pass",
+  "timestamp": "2026-04-29T12:34:56Z"
+}
+```
+
+- `scope` is `"task"` for per-task gates and `"phase"` for the phase-end aggregate run.
+- `task_id` is set when `scope == "task"`; `phase` is set when `scope == "phase"`. The other field is omitted (or null) for the off-axis scope.
+- `scenarios` is the OR-set passed to the per-runner filter; for phase scope it spans the union of scenarios introduced this phase plus all prior phases. There is no separate plan-end gate — the final phase's record is equivalent to a full-suite run.
+- `command` is the exact filtered invocation that produced the verdict, derived from `e2e.runner` and `e2e.command`.
+- `verdict` is `"pass"` or `"fail"`.
 
 ## Data Flow
 
