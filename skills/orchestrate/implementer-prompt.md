@@ -56,7 +56,7 @@ Agent(
 
     Each scenario in `e2e_scenarios` becomes exactly one test whose name STARTS WITH `S<n>:` (the colon is required and the prefix is case-sensitive). The scenario name from the plan goes after the colon. Examples:
     - playwright/vitest: `test('S1: user signs in', () => { ... })`
-    - pytest: `def test_S1_user_signs_in():` (the `S1:` prefix is matched by `-k "S1 or S2"`; underscore-separated name body is fine)
+    - pytest: `def test_S1_user_signs_in():` — pytest's collection requires the `test_` prefix on functions, so the scenario id is embedded as `test_S<n>_<name>` (no colon). pytest's `-k` filter matches by substring, so the embedded id still hits. The `S<n>:` colon-prefix rule applies to playwright/vitest only.
 
     Name-based filters (`--grep`, `-t`, `-k`) match these prefixes. Cypress filters by `--spec` instead, which works because the spec path is unique per task.
 
