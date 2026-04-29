@@ -24,7 +24,7 @@ Complete in order:
 3. **Investigate and clarify** — ask questions one at a time to deeply understand the problem and requirements. Scale depth to scope (see below). This is the most important phase — rushing through it is the #1 cause of designs that miss the mark.
 4. **Propose 2-3 approaches** — trade-offs and your recommendation
 5. **Present design** — sections scaled to complexity, approval after each
-5b. **Wireframes (UI features only)** — produce proper UX wireframes as HTML+CSS under `<plan-dir>/wireframes/` and hard-gate on the user's explicit approval (sentinel `<plan-dir>/.wireframes-approved`) before planning. Also capture **E2E Acceptance Scenarios** in the design doc — one Given/When/Then per wireframe behavior — these drive the plan's `e2e-red` task. **See:** wireframes.md for the detection rule, file layout, approval loop, and tooling notes.
+5b. **Wireframes (UI features only)** — produce proper UX wireframes as HTML+CSS under `<plan-dir>/wireframes/` and hard-gate on the user's explicit approval (sentinel `<plan-dir>/.wireframes-approved`) before planning. Also capture **E2E Acceptance Scenarios** (one Given/When/Then per wireframe behavior, each prefixed with a stable `S<n>` id) and a **Scenario Allocation** table mapping every `S<n>` to a provisional task label that reads naturally as a task name — the plan-drafter copies labels verbatim into task names. **See:** wireframes.md for the detection rule, file layout, approval loop, and tooling notes.
 6. **Set up worktree** — `EnterWorktree` enables session-aware cleanup via `ExitWorktree`:
    - `EnterWorktree(name: "<feature>")` — creates `.claude/worktrees/<feature>` with branch `<feature>`
    - Multi-phase: rename to integration branch: `git branch -m integrate/<feature>` — phase worktrees created by orchestrate as siblings
@@ -62,7 +62,7 @@ Complete in order:
     **Agent teams fallback:** If user picks "Agent teams", check `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. If not `1`, use AskUserQuestion to explain: "Agent teams requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. To enable: run `echo 'export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1' >> ~/.zshrc && source ~/.zshrc`, then restart Claude Code." Offer: "Continue with subagents" or "Stop (I'll restart with agent teams)". If they choose subagents, override the Q2 answer to `Subagents` before step 11 writes plan.json. If they stop, tell them the exact command to resume: `claude --continue` in the worktree directory.
 
     On approval, create sentinel: `mkdir -p <plan-dir> && touch <plan-dir>/.design-approved`
-8. **Write design doc** — `.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.md` (no commit — gitignored transient state). Follow **See:** `design-spec.md` for the authoritative section structure (8 always-required + 4 conditional sections, canonical order, cross-reference rules).
+8. **Write design doc** — `.claude/tcoder/YYYY-MM-DD-<topic>/design-<topic>.md` (no commit — gitignored transient state). Follow **See:** `design-spec.md` for the authoritative section structure (8 always-required + 5 conditional sections, canonical order, cross-reference rules).
 
    **Tooling detection (run now, not earlier — don't let this disrupt the conversation):**
    Run `COVERAGE_MODE=$(tcoder-settings get coverage_mode)`. If not `off`: detect whether the project has test coverage tooling configured (jest coverage config, pytest-cov/coverage.py, go test -cover, nyc/c8, etc.). Note findings for the Test Coverage section. Run the equivalent probe for E2E: `E2E_MODE=$(tcoder-settings get e2e_mode)`; when not `off`, detect any existing E2E runner (Playwright, Cypress, Selenium, Vitest+jsdom).
@@ -73,6 +73,7 @@ Complete in order:
    - Every file mentioned in the implementation approach is covered in the architecture section (and vice versa)
    - Test impact is noted for every behavior change
    - Migration/operational steps are captured if the change touches data or config
+   - When Scenarios are present, every `S<n>` id appears once in the Scenario Allocation table with a non-empty label that reads naturally as a task name
 9. **Structural validation** — run `validate-design --check <path>` against the design doc. This catches mechanical issues (missing sections, bad ordering, empty headings, cross-reference mismatches, non-goal rationale length, orphan wireframes/scenarios) before the LLM reviewer burns context on them. Fix all errors before proceeding to self-review. Hard gate — planning will not proceed without it.
 10. **Self-review pass** — before dispatching the external reviewer, read through the design doc yourself against the checklist in `agents/design-reviewer.md`. Fix any issues you find. Goal: catch obvious gaps so the external reviewer surfaces only non-obvious ones. This is an inline check, not a subagent dispatch — no output format required, just fix what you find.
 11. **Dispatch design-review subagent** — fresh reviewer agent validates design before planning (hard gate)
@@ -226,4 +227,4 @@ Use AskUserQuestion with "Looks good" / "Adjust phases" options.
 
 ## Design Doc Contents
 
-Authoritative section list, canonical order, conditional-section triggers, and cross-reference rules live in **See:** `design-spec.md`. Run `validate-design --check <path>` (step 9) to enforce structure mechanically. Conditional sections to include based on context: **Wireframes** + **E2E Acceptance Scenarios** + **E2E Tooling** for UI features (per step 5b); **Test Coverage** when `coverage_mode != off`. For multi-phase features, Implementation Approach includes phase rationale.
+Authoritative section list, canonical order, conditional-section triggers, and cross-reference rules live in **See:** `design-spec.md`. Run `validate-design --check <path>` (step 9) to enforce structure mechanically. Conditional sections to include based on context: **Wireframes** + **E2E Acceptance Scenarios** + **Scenario Allocation** + **E2E Tooling** for UI features (per step 5b); **Test Coverage** when `coverage_mode != off`. For multi-phase features, Implementation Approach includes phase rationale.

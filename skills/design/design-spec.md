@@ -25,7 +25,7 @@ Example: `.claude/tcoder/2026-04-21-feed-filter/design-feed-filter.md`
 
 ## Section Structure
 
-Twelve sections total — **eight always required**, **four conditional**. All sections, when present, appear in the canonical order listed. No section may be empty.
+Thirteen sections total — **eight always required**, **five conditional**. All sections, when present, appear in the canonical order listed. No section may be empty.
 
 | Order | Section | Required |
 |---|---|---|
@@ -34,13 +34,14 @@ Twelve sections total — **eight always required**, **four conditional**. All s
 | 3 | `## Success Criteria` | Always |
 | 4 | `## Wireframes` | When the feature has user-facing UI |
 | 5 | `## E2E Acceptance Scenarios` | When Wireframes is present |
-| 6 | `## Architecture` | Always |
-| 7 | `## Key Decisions` | Always |
-| 8 | `## Non-Goals` | Always |
-| 9 | `## Implementation Approach` | Always |
-| 10 | `## Test Coverage` | When `coverage_mode` setting is not `off` |
-| 11 | `## E2E Tooling` | When Wireframes is present |
-| 12 | `## Scope Estimate` | Always |
+| 6 | `## Scenario Allocation` | When E2E Acceptance Scenarios is present |
+| 7 | `## Architecture` | Always |
+| 8 | `## Key Decisions` | Always |
+| 9 | `## Non-Goals` | Always |
+| 10 | `## Implementation Approach` | Always |
+| 11 | `## Test Coverage` | When `coverage_mode` setting is not `off` |
+| 12 | `## E2E Tooling` | When Wireframes is present |
+| 13 | `## Scope Estimate` | Always |
 
 ---
 
@@ -71,7 +72,7 @@ Twelve sections total — **eight always required**, **four conditional**. All s
 - **Collectively complete:** If every criterion passes, the Goal is fully met — no gap.
 - **Individually necessary:** Removing any single criterion would leave a part of the Goal uncovered.
 
-### 6. `## Architecture`
+### 7. `## Architecture`
 
 **Include:** Components, relationships, and data flow. File paths and code snippets are allowed — they describe structure, not implementation logic. Include enough detail that the plan-drafter knows what to build and how pieces connect.
 
@@ -79,7 +80,7 @@ Twelve sections total — **eight always required**, **four conditional**. All s
 
 **Constraint:** Every architectural component must trace to a part of the Problem. Components with no problem-driven reason signal scope creep.
 
-### 7. `## Key Decisions`
+### 8. `## Key Decisions`
 
 **Include:** The significant trade-off decisions made during design. For each: what was chosen, what was gained, what was given up, what alternatives were considered with rejection reasons.
 
@@ -87,7 +88,7 @@ Twelve sections total — **eight always required**, **four conditional**. All s
 
 **Minimum per decision:** what was chosen, why (what the choice gains), at least one named alternative with rejection reason.
 
-### 8. `## Non-Goals`
+### 9. `## Non-Goals`
 
 **Include:** Explicit boundaries — things plausibly in scope given the Problem but intentionally excluded.
 
@@ -95,7 +96,7 @@ Twelve sections total — **eight always required**, **four conditional**. All s
 
 **Why it matters:** Agents build plausible things. A bare non-goal leaves that freedom; an explained one is an active constraint.
 
-### 9. `## Implementation Approach`
+### 10. `## Implementation Approach`
 
 **Include:** How the solution gets built — file paths, change descriptions, test impact, migration or operational steps.
 
@@ -103,7 +104,7 @@ Twelve sections total — **eight always required**, **four conditional**. All s
 
 **Required sub-elements:** file change table, test impact note per behavior change, migration/operational steps if data/config/deployment touched.
 
-### 12. `## Scope Estimate`
+### 13. `## Scope Estimate`
 
 **Include:** How big is this work? Enough for the user to decide whether to proceed and how to execute it.
 
@@ -130,25 +131,45 @@ Twelve sections total — **eight always required**, **four conditional**. All s
 
 ### 5. `## E2E Acceptance Scenarios` — required when Wireframes is present
 
-**Include:** Given/When/Then scenarios, one per observable behavior. Each scenario references at least one wireframe file by backticked path.
+**Include:** Given/When/Then scenarios, one per observable behavior. Each scenario starts with a stable id matching `^S\d+$` and references at least one wireframe file by backticked path.
 
 ```markdown
-- **User signs in:** Given the app, when the user submits credentials in `wireframes/01-login.html`, then they land on the dashboard.
+- **S1 User signs in:** Given the app, when the user submits credentials in `wireframes/01-login.html`, then they land on the dashboard.
 ```
 
 **Constraints enforced by validate-design:**
 - Every wireframe in `## Wireframes` must be referenced by ≥1 scenario (no orphan wireframes).
 - Every wireframe referenced in a scenario must be declared in `## Wireframes` (no orphan scenario references).
+- Every scenario carries an `S<n>` id and the id is unique within the section.
 
-**Why:** The plan-drafter turns these scenarios into assertions in the `e2e-red` task. Orphans on either side break the red→green gate.
+**Why:** The plan-drafter turns these scenarios into assertions in the `e2e-red` task. Orphans on either side break the red→green gate. The `S<n>` id is the join key that `## Scenario Allocation` uses to map each scenario onto a provisional task.
 
-### 10. `## Test Coverage` — required when `coverage_mode` setting is not `off`
+### 6. `## Scenario Allocation` — required when E2E Acceptance Scenarios is present
+
+**Include:** A two-column markdown table mapping each scenario id to a provisional task label. Header row: `| Scenario | Task label |`. One body row per scenario.
+
+```markdown
+| Scenario | Task label |
+|---|---|
+| S1 | Filter feed by event type |
+| S2 | Clear the active filter |
+```
+
+**Rules enforced by validate-design:**
+- Every scenario id from `## E2E Acceptance Scenarios` appears in the table exactly once. Missing or duplicate ids are errors.
+- Every label is non-empty after trim. Empty labels are errors.
+- Every id in the allocation table must exist in the Scenarios section (no orphan labels).
+- Duplicate labels across rows are allowed and are surfaced as info-level only — they indicate a single task that delivers multiple scenarios.
+
+**Why:** The plan-drafter copies labels verbatim into task `name` fields, and `validate-plan` enforces the match. The Allocation table is the bridge between the design's behavioral contract and the plan's task graph — it is what lets a fresh agent size phases without rereading the scenarios.
+
+### 11. `## Test Coverage` — required when `coverage_mode` setting is not `off`
 
 **Include:** coverage tool detected (or "none — needs setup"), coverage command, baseline percentage or `null`, threshold from the `coverage_threshold` setting.
 
 Consumed by the plan-drafter to populate `plan.json.coverage`.
 
-### 11. `## E2E Tooling` — required when Wireframes is present
+### 12. `## E2E Tooling` — required when Wireframes is present
 
 **Include:** E2E runner name (Playwright, Cypress, etc.) and the exact shell command to run the suite, backticked.
 
