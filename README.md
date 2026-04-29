@@ -338,12 +338,19 @@ Every task specifies exact files, a verification command, and a measurable end s
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "status": "Not Yet Started",
   "workflow": "pr-create",
   "goal": "Add rate limiting with per-route config",
   "architecture": "Sliding window counter in Redis, middleware per route group",
   "tech_stack": "Node.js, Redis, Express",
+  "e2e": {
+    "runner": "playwright",
+    "spec_dir": "e2e/",
+    "scenarios": [
+      { "id": "S1", "name": "429 returned after limit exceeded" }
+    ]
+  },
   "phases": [
     {
       "letter": "A",
@@ -361,6 +368,7 @@ Every task specifies exact files, a verification command, and a measurable end s
             "modify": ["src/app.ts"],
             "test": ["tests/middleware/rate-limit.test.ts"]
           },
+          "e2e_scenarios": ["S1"],
           "verification": "npm test -- --grep 'rate limit'",
           "done_when": "10 requests in 1 min returns 429 with Retry-After header, 5/5 tests pass"
         }
@@ -369,6 +377,8 @@ Every task specifies exact files, a verification command, and a measurable end s
   ]
 }
 ```
+
+> See `skills/draft-plan/schema-reference.md` for the full schema; `bin/validate-plan` is the authoritative validator.
 
 ### Schema Validation
 
