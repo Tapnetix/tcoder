@@ -506,121 +506,268 @@ do_schema() {
     done
   done
 
-  # --- E2E block + task-kind validation ---
-  # When plan.json has an e2e object, enforce double-loop TDD structure:
-  #   * exactly one task has kind=e2e-red (first task of first phase)
-  #   * exactly one task has kind=e2e-green (last task of last phase, no files
-  #     created or modified)
-  #   * every e2e.spec_files entry is created only by the e2e-red task
-  # When e2e is absent, task kind is still validated if present, but no
-  # structural constraints apply (plans without wireframes/E2E are backward
-  # compatible).
+  # --- E2E block + per-task scenario validation (schema 2 model) ---
+  # The synthetic e2e-red/e2e-green tasks are gone. The plan's e2e block
+  # declares a runner and spec_dir; every scenario in e2e.scenarios must be
+  # owned by exactly one task whose e2e_scenarios array references it. The
+  # owning task creates a deterministic spec at <spec_dir>/<task_id_lower><ext>
+  # where <ext> is derived from the runner. Tasks without e2e_scenarios may
+  # not touch any path under spec_dir.
+
+  declare -A E2E_RUNNER_EXT=(
+    [playwright]=".spec.ts"
+    [vitest]=".spec.ts"
+    [cypress]=".cy.ts"
+    [pytest]="_test.py"
+  )
+
   local e2e_has
   e2e_has=$(echo "$json" | jq 'has("e2e")')
+
+  # Per-task scalar extraction. Pull pi/ti/id/name/kind/create/modify and the
+  # e2e_scenarios array (as a CSV) for every task in one jq pass.
+  local tasks_json task_total
+  tasks_json=$(echo "$json" | jq -c '
+    [.phases | to_entries[] | .key as $pi | .value.tasks // [] | to_entries[] |
+      { pi: $pi, ti: .key,
+        id: (.value.id // ""),
+        name: (.value.name // ""),
+        kind: (.value.kind // null),
+        create: (.value.files.create // []),
+        modify: (.value.files.modify // []),
+        scenarios: (.value.e2e_scenarios // []) }]')
+  task_total=$(echo "$tasks_json" | jq 'length')
+
+  # Count tasks with a `kind` field for schema-1 deprecation handling below.
+  local kind_count
+  kind_count=$(echo "$tasks_json" | jq '[.[] | select(.kind != null)] | length')
+
+  # --- Schema-version handling ---
+  # The new model uses schema 2. Reject schema-1 plans that still carry the
+  # deprecated `kind` field; a schema-1 plan without `kind` remains quietly
+  # valid (the synthetic-task model is unused for non-E2E plans).
+  if [[ "$schema" == "1" && "$kind_count" -gt 0 ]]; then
+    local first_kind_id
+    first_kind_id=$(echo "$tasks_json" | jq -r '[.[] | select(.kind != null)][0].id')
+    err "ERROR: deprecated_kind_field: schema=1 plan declares 'kind' on task $first_kind_id; the synthetic e2e-red/e2e-green model has been replaced. Bump 'schema' to 2 and migrate to per-task e2e_scenarios. See skills/draft-plan/schema-reference.md."
+  fi
+
+  # --- E2E block shape ---
+  local e2e_runner="" e2e_spec_dir="" e2e_spec_dir_clean=""
+  declare -a E2E_SCENARIO_IDS=()
+  declare -A E2E_SCENARIO_SEEN=()
+  local derived_ext=""
+
   if [[ "$e2e_has" == "true" ]]; then
-    local e2e_command e2e_spec_count e2e_scenarios_count
+    local e2e_command e2e_scenarios_count
     e2e_command=$(echo "$json" | jq -r '.e2e.command // ""')
-    e2e_spec_count=$(echo "$json" | jq '(.e2e.spec_files // []) | length')
+    e2e_runner=$(echo "$json" | jq -r '.e2e.runner // ""')
+    e2e_spec_dir=$(echo "$json" | jq -r '.e2e.spec_dir // "e2e/"')
+    [[ -z "$e2e_spec_dir" ]] && e2e_spec_dir="e2e/"
     e2e_scenarios_count=$(echo "$json" | jq '(.e2e.scenarios // []) | length')
+
     if [[ -z "$e2e_command" || "$e2e_command" =~ ^[[:space:]]*$ ]]; then
       err "ERROR: empty_e2e_command: e2e.command must be a non-empty string"
     fi
-    [[ "$e2e_spec_count" -eq 0 ]] && err "ERROR: empty_e2e_spec_files: e2e.spec_files must contain at least one path"
+
+    if [[ -z "$e2e_runner" || -z "${E2E_RUNNER_EXT[$e2e_runner]+x}" ]]; then
+      err "ERROR: invalid_e2e_runner: e2e.runner must be one of playwright, vitest, cypress, pytest (got '$e2e_runner')"
+    else
+      derived_ext="${E2E_RUNNER_EXT[$e2e_runner]}"
+    fi
+
+    # Strip trailing slash for path derivation; preserve canonical form for
+    # comparison only when needed.
+    e2e_spec_dir_clean="${e2e_spec_dir%/}"
+
     [[ "$e2e_scenarios_count" -eq 0 ]] && err "ERROR: empty_e2e_scenarios: e2e.scenarios must contain at least one scenario"
+
+    # Validate each scenario's id and uniqueness.
+    local si
+    for ((si=0; si<e2e_scenarios_count; si++)); do
+      local sid sid_present
+      sid_present=$(echo "$json" | jq ".e2e.scenarios[$si] | has(\"id\")")
+      if [[ "$sid_present" != "true" ]]; then
+        err "ERROR: missing_scenario_id: e2e.scenarios[$si] has no id"
+        continue
+      fi
+      sid=$(echo "$json" | jq -r ".e2e.scenarios[$si].id")
+      if [[ ! "$sid" =~ ^S[0-9]+$ ]]; then
+        err "ERROR: invalid_scenario_id_format: e2e.scenarios[$si].id '$sid' must match ^S[0-9]+$"
+        continue
+      fi
+      if [[ -n "${E2E_SCENARIO_SEEN[$sid]+x}" ]]; then
+        err "ERROR: duplicate_scenario_id: scenario id '$sid' appears more than once in e2e.scenarios"
+        continue
+      fi
+      E2E_SCENARIO_SEEN[$sid]=1
+      E2E_SCENARIO_IDS+=("$sid")
+    done
+
+    # spec_files is now derived. Warn on stale plans that disagree with the
+    # computed list, but compute that warning after we know which tasks own
+    # which scenarios (below).
   fi
 
-  # Extract per-task {pi, ti, id, kind, create, modify} for kind validation.
-  local kinds_json kind_count
-  kinds_json=$(echo "$json" | jq -c '
-    [.phases | to_entries[] | .key as $pi | .value.tasks // [] | to_entries[] |
-      { pi: $pi, ti: .key, id: .value.id,
-        kind: (.value.kind // null),
-        create: (.value.files.create // []),
-        modify: (.value.files.modify // []) }]')
-  kind_count=$(echo "$kinds_json" | jq 'length')
+  # --- Per-task e2e_scenarios validation ---
+  declare -A SCENARIO_OWNER=()         # sid -> first task id seen
+  declare -A SCENARIO_OWNER_DUPS=()    # sid -> "id1,id2,..." when >1 seen
+  local ti_idx
+  for ((ti_idx=0; ti_idx<task_total; ti_idx++)); do
+    local t_id t_kind t_scen_count t_create_json t_modify_json
+    t_id=$(echo "$tasks_json" | jq -r ".[$ti_idx].id")
+    t_kind=$(echo "$tasks_json" | jq -r ".[$ti_idx].kind // \"\"")
+    t_scen_count=$(echo "$tasks_json" | jq ".[$ti_idx].scenarios | length")
+    t_create_json=$(echo "$tasks_json" | jq -c ".[$ti_idx].create")
+    t_modify_json=$(echo "$tasks_json" | jq -c ".[$ti_idx].modify")
 
-  local red_count=0 green_count=0
-  local red_pi=-1 red_ti=-1 green_pi=-1 green_ti=-1
-  for ((ki=0; ki<kind_count; ki++)); do
-    local k_kind k_id k_pi k_ti
-    k_kind=$(echo "$kinds_json" | jq -r ".[$ki].kind // \"\"")
-    [[ -z "$k_kind" ]] && continue
-    k_id=$(echo "$kinds_json" | jq -r ".[$ki].id // \"\"")
-    k_pi=$(echo "$kinds_json" | jq ".[$ki].pi")
-    k_ti=$(echo "$kinds_json" | jq ".[$ki].ti")
-    case "$k_kind" in
-      "e2e-red")
-        red_count=$((red_count + 1))
-        red_pi=$k_pi; red_ti=$k_ti
-        ;;
-      "e2e-green")
-        green_count=$((green_count + 1))
-        green_pi=$k_pi; green_ti=$k_ti
-        ;;
-      *)
-        err "ERROR: invalid_task_kind: task $k_id has kind='$k_kind' (expected: e2e-red or e2e-green)"
-        ;;
-    esac
+    # Schema-2 plans must not carry the deprecated kind field.
+    if [[ "$schema" != "1" && -n "$t_kind" ]]; then
+      err "ERROR: deprecated_kind_field: task $t_id declares 'kind' which is no longer part of the schema-2 model"
+    fi
+
+    if [[ "$t_scen_count" -gt 0 ]]; then
+      if [[ "$e2e_has" != "true" ]]; then
+        err "ERROR: e2e_scenarios_without_block: task $t_id has e2e_scenarios but plan has no e2e block"
+        continue
+      fi
+
+      # Each scenario id on the task must exist in e2e.scenarios; record
+      # ownership for cardinality checks.
+      local si2
+      for ((si2=0; si2<t_scen_count; si2++)); do
+        local tsid
+        tsid=$(echo "$tasks_json" | jq -r ".[$ti_idx].scenarios[$si2]")
+        if [[ -z "${E2E_SCENARIO_SEEN[$tsid]+x}" ]]; then
+          err "ERROR: unknown_scenario_id: task $t_id references scenario $tsid which is not declared"
+          continue
+        fi
+        if [[ -n "${SCENARIO_OWNER[$tsid]+x}" ]]; then
+          if [[ -z "${SCENARIO_OWNER_DUPS[$tsid]+x}" ]]; then
+            SCENARIO_OWNER_DUPS[$tsid]="${SCENARIO_OWNER[$tsid]},$t_id"
+          else
+            SCENARIO_OWNER_DUPS[$tsid]="${SCENARIO_OWNER_DUPS[$tsid]},$t_id"
+          fi
+        else
+          SCENARIO_OWNER[$tsid]="$t_id"
+        fi
+      done
+
+      # Deterministic spec path. pytest uses an underscore suffix on the
+      # basename; the others prepend a dot before the extension.
+      if [[ -n "$derived_ext" ]]; then
+        local id_lower spec_path
+        id_lower="${t_id,,}"
+        spec_path="${e2e_spec_dir_clean}/${id_lower}${derived_ext}"
+        # Confirm exactly one occurrence in files.create.
+        local match_count
+        match_count=$(echo "$t_create_json" | jq --arg s "$spec_path" '[.[] | select(. == $s)] | length')
+        if [[ "$match_count" -ne 1 ]]; then
+          err "ERROR: missing_e2e_spec_path: task $t_id declares e2e_scenarios but does not create $spec_path"
+        fi
+      fi
+    else
+      # Tasks without e2e_scenarios may not touch any path under spec_dir.
+      if [[ "$e2e_has" == "true" && -n "$e2e_spec_dir_clean" ]]; then
+        local touched
+        touched=$(echo "$t_create_json $t_modify_json" | jq -rs --arg dir "$e2e_spec_dir_clean/" '
+          add | .[] | select(startswith($dir))' 2>/dev/null)
+        while IFS= read -r path; do
+          [[ -z "$path" ]] && continue
+          err "ERROR: e2e_spec_contamination: task $t_id touches '$path' under spec_dir but declares no e2e_scenarios"
+        done <<< "$touched"
+      fi
+    fi
   done
 
-  if [[ "$e2e_has" == "true" && "$phase_count" -gt 0 ]]; then
-    local last_phase_idx last_task_idx
-    last_phase_idx=$((phase_count - 1))
-    last_task_idx=$(echo "$json" | jq ".phases[$last_phase_idx].tasks | length - 1")
-
-    [[ $red_count -eq 0 ]] && err "ERROR: missing_e2e_red_task: plan has e2e block but no task is marked kind='e2e-red'"
-    [[ $red_count -gt 1 ]] && err "ERROR: duplicate_e2e_red_task: more than one task marked kind='e2e-red'"
-    [[ $green_count -eq 0 ]] && err "ERROR: missing_e2e_green_task: plan has e2e block but no task is marked kind='e2e-green'"
-    [[ $green_count -gt 1 ]] && err "ERROR: duplicate_e2e_green_task: more than one task marked kind='e2e-green'"
-
-    if [[ $red_count -ge 1 ]]; then
-      if [[ $red_pi -ne 0 || $red_ti -ne 0 ]]; then
-        err "ERROR: e2e_red_position: e2e-red must be the first task of the first phase (got phase index $red_pi task index $red_ti)"
+  # Scenario ownership cardinality.
+  if [[ "$e2e_has" == "true" ]]; then
+    local sid_check
+    for sid_check in "${E2E_SCENARIO_IDS[@]}"; do
+      if [[ -z "${SCENARIO_OWNER[$sid_check]+x}" ]]; then
+        err "ERROR: unowned_scenario: scenario $sid_check has no owning task"
+      elif [[ -n "${SCENARIO_OWNER_DUPS[$sid_check]+x}" ]]; then
+        err "ERROR: duplicate_scenario_owner: scenario $sid_check claimed by tasks ${SCENARIO_OWNER_DUPS[$sid_check]}"
       fi
-    fi
-    if [[ $green_count -ge 1 ]]; then
-      if [[ $green_pi -ne $last_phase_idx || $green_ti -ne $last_task_idx ]]; then
-        err "ERROR: e2e_green_position: e2e-green must be the last task of the last phase (got phase index $green_pi task index $green_ti)"
-      fi
-      local g_create_count g_modify_count
-      g_create_count=$(echo "$json" | jq ".phases[$green_pi].tasks[$green_ti].files.create | length")
-      g_modify_count=$(echo "$json" | jq ".phases[$green_pi].tasks[$green_ti].files.modify | length")
-      if [[ "$g_create_count" -gt 0 || "$g_modify_count" -gt 0 ]]; then
-        err "ERROR: e2e_green_files_not_empty: e2e-green task must have empty files.create and files.modify (creates=$g_create_count modifies=$g_modify_count)"
-      fi
-    fi
-
-    # Every e2e spec file must be created by the e2e-red task (and only by it)
-    local spec_files_list
-    spec_files_list=$(echo "$json" | jq -r '.e2e.spec_files[]?')
-    if [[ $red_count -ge 1 ]]; then
-      local red_creates_json
-      red_creates_json=$(echo "$json" | jq -c ".phases[$red_pi].tasks[$red_ti].files.create // []")
-      while IFS= read -r spec; do
-        [[ -z "$spec" ]] && continue
-        if ! echo "$red_creates_json" | jq -e --arg s "$spec" 'index($s) != null' > /dev/null; then
-          err "ERROR: e2e_spec_not_created: e2e.spec_files references '$spec' but e2e-red task does not create it"
-        fi
-      done <<< "$spec_files_list"
-    fi
-
-    # No other task may create or modify a spec file
-    for ((ki=0; ki<kind_count; ki++)); do
-      local k_kind k_id t_pi t_ti
-      k_kind=$(echo "$kinds_json" | jq -r ".[$ki].kind // \"\"")
-      [[ "$k_kind" == "e2e-red" ]] && continue
-      k_id=$(echo "$kinds_json" | jq -r ".[$ki].id // \"\"")
-      local t_create t_modify
-      t_create=$(echo "$kinds_json" | jq -c ".[$ki].create")
-      t_modify=$(echo "$kinds_json" | jq -c ".[$ki].modify")
-      while IFS= read -r spec; do
-        [[ -z "$spec" ]] && continue
-        if echo "$t_create" | jq -e --arg s "$spec" 'index($s) != null' > /dev/null \
-           || echo "$t_modify" | jq -e --arg s "$spec" 'index($s) != null' > /dev/null; then
-          err "ERROR: e2e_spec_contamination: task $k_id touches e2e spec file '$spec' — only the e2e-red task may create it"
-        fi
-      done <<< "$spec_files_list"
     done
+
+    # Derived spec_files vs. authored spec_files: warn (not error) if the
+    # plan still carries a stale e2e.spec_files array that disagrees with
+    # what we just computed.
+    local authored_count
+    authored_count=$(echo "$json" | jq '(.e2e.spec_files // []) | length')
+    if [[ "$authored_count" -gt 0 && -n "$derived_ext" && -n "$e2e_spec_dir_clean" ]]; then
+      local derived_list authored_list
+      derived_list=$(
+        for sid_check in "${E2E_SCENARIO_IDS[@]}"; do
+          local owner_id="${SCENARIO_OWNER[$sid_check]:-}"
+          [[ -z "$owner_id" ]] && continue
+          local id_lower2="${owner_id,,}"
+          echo "${e2e_spec_dir_clean}/${id_lower2}${derived_ext}"
+        done | sort -u
+      )
+      authored_list=$(echo "$json" | jq -r '.e2e.spec_files[]?' | sort -u)
+      if [[ "$derived_list" != "$authored_list" ]]; then
+        echo "WARN: stale_e2e_spec_files: e2e.spec_files disagrees with paths derived from per-task e2e_scenarios; the field is now derived and may be removed." >&2
+      fi
+    fi
+  fi
+
+  # --- Label-to-task-name match against the design doc ---
+  if [[ "$e2e_has" == "true" ]]; then
+    local design_doc=""
+    local design_doc_jq
+    design_doc_jq=$(echo "$json" | jq -r '.design_doc // ""')
+    if [[ -n "$design_doc_jq" ]]; then
+      if [[ "$design_doc_jq" == /* ]]; then
+        design_doc="$design_doc_jq"
+      else
+        design_doc="$plan_dir/$design_doc_jq"
+      fi
+    else
+      # Convention: design lives next to plan.json as design-*.md.
+      local _candidate
+      for _candidate in "$plan_dir"/design-*.md; do
+        [[ -e "$_candidate" ]] || continue
+        design_doc="$_candidate"
+        break
+      done
+    fi
+
+    if [[ -z "$design_doc" || ! -f "$design_doc" ]]; then
+      echo "WARN: design_doc_not_found: no design-*.md found in $plan_dir; skipping Scenario Allocation label check." >&2
+    else
+      # Parse the ## Scenario Allocation table. Pull rows after the header
+      # divider until a blank line or the next ## section, then take column 2.
+      local labels
+      labels=$(awk '
+        /^##[[:space:]]+Scenario Allocation([[:space:]]|$)/ { in_section=1; next }
+        in_section && /^##[[:space:]]/                   { in_section=0 }
+        in_section && /^[[:space:]]*$/                   { if (saw_div) in_section=0; next }
+        in_section && /^\|[[:space:]]*-+/                { saw_div=1; next }
+        in_section && saw_div && /^\|/ {
+          n = split($0, parts, "|")
+          if (n >= 3) {
+            label = parts[3]
+            sub(/^[[:space:]]+/, "", label)
+            sub(/[[:space:]]+$/, "", label)
+            if (length(label) > 0) print label
+          }
+        }
+      ' "$design_doc" | awk '!seen[$0]++')
+
+      if [[ -n "$labels" ]]; then
+        # Build a set of task names for membership lookup.
+        local task_names_json
+        task_names_json=$(echo "$tasks_json" | jq -c '[.[] | .name]')
+        while IFS= read -r label; do
+          [[ -z "$label" ]] && continue
+          if ! echo "$task_names_json" | jq -e --arg l "$label" 'index($l) != null' > /dev/null; then
+            err "ERROR: missing_label_task: design label '$label' has no matching task name in plan"
+          fi
+        done <<< "$labels"
+      fi
+    fi
   fi
 
   if [ ${#ERRORS[@]} -gt 0 ]; then
