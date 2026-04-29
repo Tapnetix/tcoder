@@ -239,6 +239,43 @@ jq '. + {"workflow": "plan-only"} | .phases[0] += {"depends_on": []} | .phases[1
 assert_pass "valid workflow plan-only passes" \
   "$VALIDATE" --schema "$TMPDIR/plan.json"
 
+# ---------------------------------------------------------------------------
+# Schema-version handling
+# ---------------------------------------------------------------------------
+# schema=1 without `kind` remains valid (legacy non-E2E plans). The
+# valid-plan fixture is schema=1 already and has been exercised in Test 1,
+# so the dedicated case below targets the rejection path: a schema=1 plan
+# that still carries the synthetic `kind: e2e-red` field must be rejected
+# under the new validator with deprecated_kind_field. The schema=2 baseline
+# cases assert that both bare plans (no e2e) and e2e-enabled plans pass.
+
+echo "Test 24: schema=1 with no kind fields still passes (legacy compat)"
+rm -rf "${TMPDIR:?}/"*
+cp -r "$FIXTURES/valid-plan/"* "$TMPDIR/"
+cp "$FIXTURES/valid-plan/plan.json" "$TMPDIR/plan.json"
+assert_pass "schema=1 without kind passes" \
+  "$VALIDATE" --schema "$TMPDIR/plan.json"
+
+echo "Test 25: schema=1 with kind=e2e-red is rejected"
+rm -rf "${TMPDIR:?}/"*
+cp -r "$FIXTURES/valid-plan/"* "$TMPDIR/"
+jq '.phases[0].tasks[0].kind = "e2e-red"' "$FIXTURES/valid-plan/plan.json" > "$TMPDIR/plan.json"
+assert_fail "schema=1 + kind rejected" "deprecated_kind_field" \
+  "$VALIDATE" --schema "$TMPDIR/plan.json"
+
+echo "Test 26: schema=2 baseline (no e2e block, no kind) passes"
+rm -rf "${TMPDIR:?}/"*
+cp -r "$FIXTURES/valid-plan/"* "$TMPDIR/"
+jq '.schema = 2' "$FIXTURES/valid-plan/plan.json" > "$TMPDIR/plan.json"
+assert_pass "schema=2 plain plan passes" \
+  "$VALIDATE" --schema "$TMPDIR/plan.json"
+
+echo "Test 27: schema=2 with e2e block and per-task scenarios passes"
+rm -rf "${TMPDIR:?}/"*
+cp -r "$FIXTURES/baseline-good/"* "$TMPDIR/"
+assert_pass "schema=2 e2e plan passes" \
+  "$VALIDATE" --schema "$TMPDIR/plan.json"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

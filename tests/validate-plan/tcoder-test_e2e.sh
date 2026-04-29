@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# End-to-end exercise of validate-plan against full plan trees. Covers
+# render + update-status flow (against the non-E2E valid-plan fixture) and
+# multi-phase deterministic spec-path derivation for the schema-2 e2e
+# pipeline. Per-rule unit cases live in the focused tcoder-test_*.sh files.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -69,6 +73,44 @@ check "schema validates after updates" "$VALIDATE" --schema "$TMPDIR/plan.json"
 cp "$TMPDIR/plan.md" "$TMPDIR/plan-before.md"
 "$VALIDATE" --render "$TMPDIR/plan.json"
 check "render idempotent after updates" diff -q "$TMPDIR/plan-before.md" "$TMPDIR/plan.md"
+
+# ---------------------------------------------------------------------------
+# Multi-phase schema-2 e2e plan: scenarios distributed across two phases,
+# with deterministic spec paths derived from runner + spec_dir + task id.
+# These cases ensure validate-plan walks all phases (not just phase A) when
+# resolving e2e_scenarios ownership and spec-path matching. The fixture
+# under fixtures/multiphase-good/ ships the playwright shape; the pytest
+# variant is derived via jq so reviewers can diff the runner-specific bits
+# from a single canonical source.
+# ---------------------------------------------------------------------------
+
+MULTI_DIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR" "$MULTI_DIR"' EXIT
+
+seed_multiphase() {
+  local dir="$1"
+  rm -rf "${dir:?}/"*
+  cp -r "$FIXTURES/multiphase-good/"* "$dir/"
+}
+
+echo ""
+echo "=== Multi-phase deterministic spec-path tests ==="
+
+echo "Test: playwright runner, scenarios across two phases"
+seed_multiphase "$MULTI_DIR"
+check "playwright multi-phase plan validates" \
+  "$VALIDATE" --schema "$MULTI_DIR/plan.json"
+
+echo "Test: pytest runner, scenarios across two phases"
+seed_multiphase "$MULTI_DIR"
+jq '
+  .e2e.runner = "pytest"
+  | .e2e.command = "pytest"
+  | .phases[0].tasks[0].files.create = ["e2e/a1_test.py"]
+  | .phases[1].tasks[0].files.create = ["e2e/b1_test.py"]
+' "$MULTI_DIR/plan.json" > "$MULTI_DIR/p.json" && mv "$MULTI_DIR/p.json" "$MULTI_DIR/plan.json"
+check "pytest multi-phase plan validates" \
+  "$VALIDATE" --schema "$MULTI_DIR/plan.json"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

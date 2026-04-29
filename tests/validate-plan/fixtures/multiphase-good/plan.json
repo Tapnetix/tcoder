@@ -1,0 +1,66 @@
+{
+  "schema": 2,
+  "status": "In Development",
+  "workflow": "direct-merge",
+  "execution_mode": "subagents",
+  "goal": "Two-phase schema-2 plan with one scenario owned by each phase. Used to confirm the validator walks all phases when resolving e2e_scenarios ownership and matching the derived spec path.",
+  "architecture": "Phase A owns S1, phase B owns S2.",
+  "tech_stack": "bash, jq",
+  "phases": [
+    {
+      "letter": "A",
+      "name": "First",
+      "status": "Not Started",
+      "depends_on": [],
+      "rationale": "Phase A owns scenario S1.",
+      "tasks": [
+        {
+          "id": "A1",
+          "name": "Open and render a markdown file",
+          "status": "pending",
+          "depends_on": [],
+          "files": {
+            "create": ["e2e/a1.spec.ts"],
+            "modify": [],
+            "test": []
+          },
+          "verification": "npx playwright test --grep S1",
+          "done_when": "S1 passes",
+          "e2e_scenarios": ["S1"]
+        }
+      ]
+    },
+    {
+      "letter": "B",
+      "name": "Second",
+      "status": "Not Started",
+      "depends_on": ["A"],
+      "rationale": "Phase B owns scenario S2.",
+      "tasks": [
+        {
+          "id": "B1",
+          "name": "Add comment to a selection",
+          "status": "pending",
+          "depends_on": ["A1"],
+          "files": {
+            "create": ["e2e/b1.spec.ts"],
+            "modify": [],
+            "test": []
+          },
+          "verification": "npx playwright test --grep S2",
+          "done_when": "S2 passes",
+          "e2e_scenarios": ["S2"]
+        }
+      ]
+    }
+  ],
+  "e2e": {
+    "command": "npx playwright test",
+    "runner": "playwright",
+    "spec_dir": "e2e/",
+    "scenarios": [
+      { "id": "S1", "name": "Open and render markdown" },
+      { "id": "S2", "name": "Add comment to selection" }
+    ]
+  }
+}
