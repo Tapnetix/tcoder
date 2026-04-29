@@ -75,13 +75,12 @@ For multi-task plans with cross-task data flow:
 - Flag: `coverage.command` doesn't match project tooling (e.g., jest command for a pytest project)
 
 **E2E checks** (when plan.json has an `e2e` object — structural constraints already enforced by `--schema`):
-- Every scenario in the design doc's E2E Acceptance Scenarios section is asserted by at least one spec file in the `e2e-red` task's prose (no orphan scenarios)
-- `e2e-red` task prose shows writing a failing spec per scenario, running the suite, confirming all fail with the expected reason (feature not yet built), then committing
-- `e2e-green` task prose shows running the suite and confirming all scenarios PASS with no edits to spec files since `e2e-red`
-- `e2e.command` is runnable for the project's stack
-- Flag: scenario from design doc with no corresponding assertion in any spec
-- Flag: `e2e-red` prose omits the "verify failure" step (breaks the red-green discipline)
-- Flag: Any non-red task's prose edits or regenerates an E2E spec file
+- Every scenario in the design doc's E2E Acceptance Scenarios section is allocated to exactly one task per the design's Scenario Allocation table, and that task's `e2e_scenarios` array carries the matching scenario id
+- The owning task's prose describes writing a failing spec at the deterministic path `<e2e.spec_dir>/<task_id_lower>.<ext>` with scenario-id-prefixed test names, running the per-runner filtered command to verify red, implementing, re-running to verify green, and committing
+- `e2e.command` is runnable for the project's stack (validate-plan derives the spec-files list from per-task fields, so no separate enumeration check applies here)
+- Flag: scenario from design doc with no owning task (or owned by more than one task)
+- Flag: a task with `e2e_scenarios` does not describe writing the spec, verifying it fails, and re-running for green
+- Flag: a task without `e2e_scenarios` whose prose creates or edits a path under `e2e.spec_dir`
 - Flag: design has Wireframes section but plan.json has no `e2e` block
 
 - Flag: Test expects `fn(a, b)` but implementation defines `fn(a, b, c)`
@@ -124,7 +123,7 @@ Check for:
 Read the Success Criteria section from the design doc.
 For each criterion, verify it maps to at least one task's "Done when" field.
 
-If the design doc has a **Wireframes** section, apply the E2E checks listed above: every Given/When/Then scenario appears in the `e2e-red` task's spec files, the `e2e-green` task runs the full suite without editing specs, and `e2e.command` is runnable in this project.
+If the design doc has a **Wireframes** section, apply the E2E checks listed above: every scenario id appears in exactly one task's `e2e_scenarios` array per the design's Scenario Allocation, no task without `e2e_scenarios` touches a path under `e2e.spec_dir`, and `e2e.command` is runnable in this project.
 
 A criterion is covered if one or more tasks' "done when" fields collectively
 satisfy the criterion's behavioral intent. The mapping need not be 1:1 —

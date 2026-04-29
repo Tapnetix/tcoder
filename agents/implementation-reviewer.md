@@ -42,12 +42,12 @@ Hunt for issues that span task boundaries:
 8. **Inadequate integration test coverage** -- missing broad acceptance tests (Level 1), missing boundary tests at cross-task seams (Level 2), tests that mock away the boundaries they should verify
 
 9. **E2E Red→Green Arc** (skip when plan.json has no `e2e` block)
-   Verify double-loop TDD was honored across the diff range:
-   - The commit that adds the E2E spec files (`e2e.spec_files` paths) precedes every implementation commit (the `e2e-red` task was first).
-   - No commit between the `e2e-red` sha and HEAD modifies any `e2e.spec_files` path — the red→green arc is preserved.
+   Verify per-task double-loop TDD was honored across the diff range:
+   - For every task with a non-empty `e2e_scenarios` array, the deterministic spec file at `<e2e.spec_dir>/<task_id_lower>.<ext>` was created within that task's commit range and not modified afterward by any other task.
+   - Each such task's commit history shows a green run of the per-runner filtered command for its scenarios.
    - Running `e2e.command` at HEAD exits zero and every scenario in `e2e.scenarios` is reported as passed.
    - Severity depends on `E2E_MODE`: `enforce` → below = **Critical**; `advisory` → below = **Moderate**.
-   - Flag: any commit between red-sha and HEAD touches a spec file (spec drift)
+   - Flag: a later task modifies a spec file owned by an earlier task (spec drift across tasks)
    - Flag: E2E suite is not GREEN at HEAD (implementation incomplete)
    - Flag: plan has wireframes but no `e2e` block (planning gate bypassed)
 
