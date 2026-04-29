@@ -104,7 +104,7 @@ Evaluate against codebase conventions.
 **Skip this check when the task metadata's `e2e_scenarios` array is empty or absent.**
 
 When `e2e_scenarios` is non-empty:
-- Verify the spec file at `<e2e.spec_dir>/<task_id_lower>.<ext>` (where `<ext>` derives from `e2e.runner`: playwright/vitest → `spec.ts`, cypress → `cy.ts`, pytest → `_test.py` suffix) was created in the diff
+- Verify the spec file at `<e2e.spec_dir>/<task_id_lower><ext>` (where `<ext>` derives from `e2e.runner`: playwright/vitest → `.spec.ts`, cypress → `.cy.ts`, pytest → `_test.py`) was created in the diff
 - Open the spec file and confirm every test name starts with one of the scenario IDs (`S1:`, `S2:`, etc. for playwright/vitest/cypress; `test_S1_*` for pytest)
 - Inspect commit history: at least one commit in the diff range must show a successful run of the per-runner filtered command (the implementer commits on green)
 - Severity depends on `e2e_mode`:
