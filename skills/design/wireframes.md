@@ -43,11 +43,11 @@ Use semantic HTML with `id`/`data-testid` attributes on interactive elements so 
 In the design doc write:
 
 - A **Wireframes** section listing each HTML file with a one-line purpose.
-- An **E2E Acceptance Scenarios** section — one Given/When/Then scenario per behavior that operationalizes a wireframe. Each scenario starts with a stable `S<n>` id (e.g. `**S1 User signs in:** ...`) and names the wireframe it exercises. These scenarios are what the plan's `e2e-red` task turns into failing automated tests.
+- An **E2E Acceptance Scenarios** section — one Given/When/Then scenario per behavior that operationalizes a wireframe. Each scenario starts with a stable `S<n>` id (e.g. `**S1 User signs in:** ...`) and names the wireframe it exercises. These scenarios are what each owning task turns into a failing spec at the start of its TDD cycle.
 - A **Scenario Allocation** section — a `| Scenario | Task label |` table mapping every `S<n>` to a provisional task label. The plan-drafter copies these labels verbatim into task names, so write each label the way you'd want a task to read.
 
 Scenarios must be human-verifiable and implementation-independent — "User signs in and lands on dashboard showing their team count" (good), not "login() returns 200" (implementation).
 
 ## Tooling
 
-Name the E2E runner in the design doc (e.g. Playwright for browser UIs, Vitest+jsdom for component UIs, Pytest+Selenium for Python stacks). The plan drafter writes this into `plan.json.e2e.command`. If the project has no runner yet, the first implementation task (after `e2e-red`) is a setup task.
+Name the E2E runner in the design doc (e.g. Playwright for browser UIs, Vitest+jsdom for component UIs, Pytest+Selenium for Python stacks). The plan drafter writes this into `plan.json.e2e.command` and `plan.json.e2e.runner`. If the project has no runner yet, an early implementation task is a setup task.

@@ -142,7 +142,7 @@ Thirteen sections total — **eight always required**, **five conditional**. All
 - Every wireframe referenced in a scenario must be declared in `## Wireframes` (no orphan scenario references).
 - Every scenario carries an `S<n>` id and the id is unique within the section.
 
-**Why:** The plan-drafter turns these scenarios into assertions in the `e2e-red` task. Orphans on either side break the red→green gate. The `S<n>` id is the join key that `## Scenario Allocation` uses to map each scenario onto a provisional task.
+**Why:** The owning task turns each scenario into assertions in its dedicated spec file at the deterministic path. Orphans on either side break the red→green gate. The `S<n>` id is the join key that `## Scenario Allocation` uses to map each scenario onto a provisional task.
 
 ### 6. `## Scenario Allocation` — required when E2E Acceptance Scenarios is present
 
