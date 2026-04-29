@@ -25,7 +25,6 @@ Let operators filter the activity feed by event type in one click.
 
 - **S1 Filter narrows feed:** Given the feed has 20 mixed entries, when the user clicks the "Deploys" pill in `wireframes/01-feed.html`, then only deploy entries appear.
 - **S2 Clear filter restores feed:** Given a filter is active in `wireframes/02-feed-filtered.html`, when the user clicks "Clear", then all 20 entries reappear.
-- **S3 Filter persists on reload:** Given the user has filtered to "Alerts" in `wireframes/02-feed-filtered.html`, when the page reloads, then the alert filter is still active.
 
 ## Scenario Allocation
 
@@ -33,7 +32,6 @@ Let operators filter the activity feed by event type in one click.
 |---|---|
 | S1 | Filter feed by event type |
 | S2 | Clear the active filter |
-| S3 | Persist the filter selection |
 
 ## Architecture
 

@@ -40,6 +40,7 @@ ALL_ORDERED=(
   "Success Criteria"
   "Wireframes"
   "E2E Acceptance Scenarios"
+  "Scenario Allocation"
   "Architecture"
   "Key Decisions"
   "Non-Goals"
@@ -288,6 +289,111 @@ do_check() {
         err "orphan_scenario_wireframe: scenario references '${wf}' which is not declared in the Wireframes section"
       fi
     done <<< "$referenced_wfs"
+  fi
+
+  # ----------------------------------------------------------------
+  # Check 9: Scenario Allocation — required when E2E Acceptance Scenarios
+  # is present. Validates scenario IDs (^S[0-9]+$), one allocation row per
+  # scenario, non-empty labels, and no orphan rows. Duplicate labels are
+  # intentionally allowed (multi-scenario task pattern; info-level only).
+  # ----------------------------------------------------------------
+  if [[ -n "$scen_line" ]]; then
+    local alloc_line
+    alloc_line="$(section_line "$doc" "Scenario Allocation")"
+
+    if [[ -z "$alloc_line" ]]; then
+      err "missing_scenario_allocation: '## E2E Acceptance Scenarios' present but '## Scenario Allocation' is missing"
+    else
+      local scen_next alloc_next
+      scen_next="$(next_heading_line "$doc" "$scen_line" "$total_lines")"
+      alloc_next="$(next_heading_line "$doc" "$alloc_line" "$total_lines")"
+
+      # Extract scenario IDs declared in the Scenarios section. Scenarios use
+      # bullet/heading lines that begin with the ID (optionally bolded), e.g.
+      # `- **S1 ...` or `- S1: ...`. Strip leading list markers and emphasis,
+      # then capture the leading token. Anything not matching ^S[0-9]+$ is a
+      # malformed_scenario_id.
+      local scen_block scenario_tokens
+      scen_block="$(awk -v s="$scen_line" -v e="$scen_next" 'NR > s && NR < e' "$doc")"
+      scenario_tokens="$(echo "$scen_block" \
+        | grep -E '^[[:space:]]*[-*][[:space:]]+' \
+        | sed -E 's/^[[:space:]]*[-*][[:space:]]+//; s/^\*\*//; s/^__//' \
+        | awk '{print $1}' \
+        || true)"
+
+      local declared_scenarios=""
+      local seen_scenarios=""
+      while IFS= read -r tok; do
+        [[ -z "$tok" ]] && continue
+        # Trim trailing punctuation (colon, asterisks).
+        tok="${tok%%:*}"
+        tok="${tok%%\**}"
+        if [[ ! "$tok" =~ ^S[0-9]+$ ]]; then
+          err "malformed_scenario_id: scenario id '${tok}' does not match ^S[0-9]+$"
+          continue
+        fi
+        if echo "$seen_scenarios" | grep -qFx "$tok"; then
+          err "duplicate_scenario_id: scenario id '${tok}' declared more than once"
+          continue
+        fi
+        seen_scenarios="${seen_scenarios}${tok}"$'\n'
+        declared_scenarios="${declared_scenarios}${tok}"$'\n'
+      done <<< "$scenario_tokens"
+
+      # Parse the allocation table. Skip header row and separator row; collect
+      # the scenario id (first cell) and label (second cell) from each data row.
+      local alloc_block
+      alloc_block="$(awk -v s="$alloc_line" -v e="$alloc_next" 'NR > s && NR < e' "$doc")"
+
+      local alloc_ids=""
+      local seen_alloc_ids=""
+      local row_idx=0
+      while IFS= read -r row; do
+        # Only consider rows that look like table rows.
+        [[ "$row" =~ ^[[:space:]]*\| ]] || continue
+        # Skip separator rows (only dashes, pipes, colons, spaces).
+        if [[ "$row" =~ ^[[:space:]]*\|[[:space:]:|-]+\|?[[:space:]]*$ ]]; then
+          continue
+        fi
+        row_idx=$((row_idx + 1))
+        # First data row is the header — skip it.
+        if [[ "$row_idx" -eq 1 ]]; then
+          continue
+        fi
+
+        # Strip leading/trailing pipe and spaces, then split on |.
+        local stripped first second
+        stripped="$(echo "$row" | sed -E 's/^[[:space:]]*\|//; s/\|[[:space:]]*$//')"
+        first="$(echo "$stripped" | awk -F'|' '{print $1}' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        second="$(echo "$stripped" | awk -F'|' '{print $2}' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+
+        if [[ -z "$second" ]]; then
+          err "empty_scenario_label: allocation row for '${first}' has an empty label"
+        fi
+
+        if [[ -n "$first" ]]; then
+          if echo "$seen_alloc_ids" | grep -qFx "$first"; then
+            err "duplicate_allocation_id: scenario id '${first}' appears more than once in the allocation table"
+          else
+            seen_alloc_ids="${seen_alloc_ids}${first}"$'\n'
+          fi
+          alloc_ids="${alloc_ids}${first}"$'\n'
+
+          # Orphan: allocation references a scenario that wasn't declared.
+          if ! echo "$declared_scenarios" | grep -qFx "$first"; then
+            err "orphan_allocation_label: allocation references scenario '${first}' which is not declared in '## E2E Acceptance Scenarios'"
+          fi
+        fi
+      done <<< "$alloc_block"
+
+      # Every declared scenario must appear in the allocation table.
+      while IFS= read -r sid; do
+        [[ -z "$sid" ]] && continue
+        if ! echo "$alloc_ids" | grep -qFx "$sid"; then
+          err "missing_allocation_for_scenario: scenario '${sid}' is declared but not present in the allocation table"
+        fi
+      done <<< "$declared_scenarios"
+    fi
   fi
 
   # ----------------------------------------------------------------

@@ -91,6 +91,30 @@ echo "Test 13: Scenario references a wireframe not in Wireframes section fails"
 assert_fail "orphan scenario reference detected" "orphan_scenario_wireframe.*wireframes/99-ghost.html" \
   "$VALIDATE" --check "$FIXTURES/orphan-scenario.md"
 
+echo "Test 14a: Scenario Allocation good fixture passes"
+assert_pass "scenario-allocation good passes" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/good.md"
+
+echo "Test 14b: Scenario Allocation missing section fails"
+assert_fail "missing_scenario_allocation detected" "missing_scenario_allocation" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/missing-section.md"
+
+echo "Test 14c: Scenario Allocation malformed scenario ID fails"
+assert_fail "malformed_scenario_id detected" "malformed_scenario_id" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/malformed-id.md"
+
+echo "Test 14d: Scenario Allocation empty label fails"
+assert_fail "empty_scenario_label detected" "empty_scenario_label" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/empty-label.md"
+
+echo "Test 14e: Scenario Allocation orphan label fails"
+assert_fail "orphan_allocation_label detected" "orphan_allocation_label" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/orphan-label.md"
+
+echo "Test 14f: Scenario Allocation duplicate labels passes (info only)"
+assert_pass "scenario-allocation duplicate labels passes" \
+  "$VALIDATE" --check "$FIXTURES/scenario-allocation/duplicate-label.md"
+
 echo "Test 14: No args exits with usage"
 if "$VALIDATE" > /dev/null 2>&1; then
   echo "FAIL: no args should exit non-zero"
