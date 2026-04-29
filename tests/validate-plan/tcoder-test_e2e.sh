@@ -78,103 +78,37 @@ check "render idempotent after updates" diff -q "$TMPDIR/plan-before.md" "$TMPDI
 # Multi-phase schema-2 e2e plan: scenarios distributed across two phases,
 # with deterministic spec paths derived from runner + spec_dir + task id.
 # These cases ensure validate-plan walks all phases (not just phase A) when
-# resolving e2e_scenarios ownership and spec-path matching.
+# resolving e2e_scenarios ownership and spec-path matching. The fixture
+# under fixtures/multiphase-good/ ships the playwright shape; the pytest
+# variant is derived via jq so reviewers can diff the runner-specific bits
+# from a single canonical source.
 # ---------------------------------------------------------------------------
 
-build_multiphase_plan() {
-  local dir="$1" runner="$2" ext="$3"
+MULTI_DIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR" "$MULTI_DIR"' EXIT
+
+seed_multiphase() {
+  local dir="$1"
   rm -rf "${dir:?}/"*
-  mkdir -p "$dir/phase-a" "$dir/phase-b"
-  : > "$dir/phase-a/completion.md"
-  : > "$dir/phase-b/completion.md"
-  echo "# A1: Open and render a markdown file"   > "$dir/phase-a/a1.md"
-  echo "# B1: Add comment to a selection"        > "$dir/phase-b/b1.md"
-
-  cat > "$dir/design-multiphase.md" <<'MD'
-# Multiphase design
-
-## E2E Acceptance Scenarios
-
-- S1: open and render
-- S2: add comment
-
-## Scenario Allocation
-
-| Scenario | Task label |
-|---|---|
-| S1 | Open and render a markdown file |
-| S2 | Add comment to a selection |
-MD
-
-  jq -n --arg runner "$runner" --arg a1spec "e2e/a1${ext}" --arg b1spec "e2e/b1${ext}" '
-    {
-      schema: 2,
-      status: "In Development",
-      workflow: "direct-merge",
-      execution_mode: "subagents",
-      goal: "multiphase",
-      architecture: "two-phase",
-      tech_stack: "ts",
-      phases: [
-        {
-          letter: "A",
-          name: "First",
-          status: "Not Started",
-          depends_on: [],
-          rationale: "phase A owns S1",
-          tasks: [{
-            id: "A1",
-            name: "Open and render a markdown file",
-            status: "pending",
-            depends_on: [],
-            files: { create: [$a1spec], modify: [], test: [] },
-            verification: "v",
-            done_when: "d",
-            e2e_scenarios: ["S1"]
-          }]
-        },
-        {
-          letter: "B",
-          name: "Second",
-          status: "Not Started",
-          depends_on: ["A"],
-          rationale: "phase B owns S2",
-          tasks: [{
-            id: "B1",
-            name: "Add comment to a selection",
-            status: "pending",
-            depends_on: ["A1"],
-            files: { create: [$b1spec], modify: [], test: [] },
-            verification: "v",
-            done_when: "d",
-            e2e_scenarios: ["S2"]
-          }]
-        }
-      ],
-      e2e: {
-        command: "run-tests",
-        runner: $runner,
-        spec_dir: "e2e/",
-        scenarios: [
-          { id: "S1", name: "open and render" },
-          { id: "S2", name: "add comment" }
-        ]
-      }
-    }' > "$dir/plan.json"
+  cp -r "$FIXTURES/multiphase-good/"* "$dir/"
 }
 
 echo ""
 echo "=== Multi-phase deterministic spec-path tests ==="
 
 echo "Test: playwright runner, scenarios across two phases"
-MULTI_DIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR" "$MULTI_DIR"' EXIT
-build_multiphase_plan "$MULTI_DIR" "playwright" ".spec.ts"
+seed_multiphase "$MULTI_DIR"
 check "playwright multi-phase plan validates" \
   "$VALIDATE" --schema "$MULTI_DIR/plan.json"
 
 echo "Test: pytest runner, scenarios across two phases"
-build_multiphase_plan "$MULTI_DIR" "pytest" "_test.py"
+seed_multiphase "$MULTI_DIR"
+jq '
+  .e2e.runner = "pytest"
+  | .e2e.command = "pytest"
+  | .phases[0].tasks[0].files.create = ["e2e/a1_test.py"]
+  | .phases[1].tasks[0].files.create = ["e2e/b1_test.py"]
+' "$MULTI_DIR/plan.json" > "$MULTI_DIR/p.json" && mv "$MULTI_DIR/p.json" "$MULTI_DIR/plan.json"
 check "pytest multi-phase plan validates" \
   "$VALIDATE" --schema "$MULTI_DIR/plan.json"
 
