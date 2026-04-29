@@ -1,0 +1,34 @@
+{
+  "schema": 2,
+  "status": "In Development",
+  "workflow": "direct-merge",
+  "execution_mode": "subagents",
+  "goal": "Task carries e2e_scenarios but the plan has no e2e block.",
+  "architecture": "Single phase, single task with e2e_scenarios but no top-level e2e block to anchor the scenario.",
+  "tech_stack": "bash, jq",
+  "phases": [
+    {
+      "letter": "A",
+      "name": "Foundation",
+      "status": "Not Started",
+      "depends_on": [],
+      "rationale": "Task references S1 but no e2e block declares it.",
+      "tasks": [
+        {
+          "id": "A1",
+          "name": "Render markdown",
+          "status": "pending",
+          "depends_on": [],
+          "files": {
+            "create": ["src/render.ts"],
+            "modify": [],
+            "test": []
+          },
+          "verification": "npm test -- render",
+          "done_when": "renderer compiles",
+          "e2e_scenarios": ["S1"]
+        }
+      ]
+    }
+  ]
+}

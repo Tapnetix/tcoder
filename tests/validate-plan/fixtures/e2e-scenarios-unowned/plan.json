@@ -1,0 +1,43 @@
+{
+  "schema": 2,
+  "status": "In Development",
+  "workflow": "direct-merge",
+  "execution_mode": "subagents",
+  "goal": "Plan declares S2 in e2e.scenarios but no task claims it.",
+  "architecture": "Single phase. A1 owns S1; S2 is left orphaned in the e2e block.",
+  "tech_stack": "bash, jq, playwright",
+  "phases": [
+    {
+      "letter": "A",
+      "name": "Foundation",
+      "status": "Not Started",
+      "depends_on": [],
+      "rationale": "S1 has an owner; S2 is intentionally orphaned.",
+      "tasks": [
+        {
+          "id": "A1",
+          "name": "Render markdown",
+          "status": "pending",
+          "depends_on": [],
+          "files": {
+            "create": ["e2e/a1.spec.ts"],
+            "modify": [],
+            "test": []
+          },
+          "verification": "npx playwright test --grep S1",
+          "done_when": "S1 passes",
+          "e2e_scenarios": ["S1"]
+        }
+      ]
+    }
+  ],
+  "e2e": {
+    "command": "npx playwright test",
+    "runner": "playwright",
+    "spec_dir": "e2e/",
+    "scenarios": [
+      { "id": "S1", "name": "Render markdown" },
+      { "id": "S2", "name": "Add comment" }
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema": 2,
+  "status": "In Development",
+  "workflow": "direct-merge",
+  "execution_mode": "subagents",
+  "goal": "Design's Scenario Allocation table references a task label that no task name matches.",
+  "architecture": "Plan defines task A1 'Render markdown'; design references label 'Foo' which has no corresponding task.",
+  "tech_stack": "bash, jq, playwright",
+  "design_doc": "design.md",
+  "phases": [
+    {
+      "letter": "A",
+      "name": "Foundation",
+      "status": "Not Started",
+      "depends_on": [],
+      "rationale": "S1 is owned correctly; the design references a non-existent task by label.",
+      "tasks": [
+        {
+          "id": "A1",
+          "name": "Render markdown",
+          "status": "pending",
+          "depends_on": [],
+          "files": {
+            "create": ["e2e/a1.spec.ts"],
+            "modify": [],
+            "test": []
+          },
+          "verification": "npx playwright test --grep S1",
+          "done_when": "S1 passes",
+          "e2e_scenarios": ["S1"]
+        }
+      ]
+    }
+  ],
+  "e2e": {
+    "command": "npx playwright test",
+    "runner": "playwright",
+    "spec_dir": "e2e/",
+    "scenarios": [
+      { "id": "S1", "name": "Render markdown" }
+    ]
+  }
+}
