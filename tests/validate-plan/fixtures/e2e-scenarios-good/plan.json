@@ -1,0 +1,80 @@
+{
+  "schema": 2,
+  "status": "In Development",
+  "workflow": "direct-merge",
+  "execution_mode": "subagents",
+  "goal": "Happy-path fixture exercising per-task e2e_scenarios across two phases.",
+  "architecture": "Two phases. Phase A owns S1 in A1; A2 has no scenario. Phase B owns S2 in B1.",
+  "tech_stack": "bash, jq, playwright",
+  "design_doc": "design.md",
+  "phases": [
+    {
+      "letter": "A",
+      "name": "Foundation",
+      "status": "Not Started",
+      "depends_on": [],
+      "rationale": "Render markdown scenario lives here.",
+      "tasks": [
+        {
+          "id": "A1",
+          "name": "Render markdown",
+          "status": "pending",
+          "depends_on": [],
+          "files": {
+            "create": ["e2e/a1.spec.ts"],
+            "modify": [],
+            "test": []
+          },
+          "verification": "npx playwright test --grep S1",
+          "done_when": "S1 passes",
+          "e2e_scenarios": ["S1"]
+        },
+        {
+          "id": "A2",
+          "name": "Wire renderer into shell",
+          "status": "pending",
+          "depends_on": ["A1"],
+          "files": {
+            "create": ["src/shell.ts"],
+            "modify": [],
+            "test": []
+          },
+          "verification": "npm test -- shell",
+          "done_when": "shell module compiles"
+        }
+      ]
+    },
+    {
+      "letter": "B",
+      "name": "Comments",
+      "status": "Not Started",
+      "depends_on": ["A"],
+      "rationale": "Comment scenario lives here.",
+      "tasks": [
+        {
+          "id": "B1",
+          "name": "Add comment",
+          "status": "pending",
+          "depends_on": ["A2"],
+          "files": {
+            "create": ["e2e/b1.spec.ts"],
+            "modify": [],
+            "test": []
+          },
+          "verification": "npx playwright test --grep S2",
+          "done_when": "S2 passes",
+          "e2e_scenarios": ["S2"]
+        }
+      ]
+    }
+  ],
+  "e2e": {
+    "command": "npx playwright test",
+    "runner": "playwright",
+    "spec_dir": "e2e/",
+    "scenarios": [
+      { "id": "S1", "name": "Render markdown" },
+      { "id": "S2", "name": "Add comment" }
+    ]
+  }
+}
