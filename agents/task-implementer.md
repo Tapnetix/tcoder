@@ -39,6 +39,8 @@ If your task metadata includes a non-empty `e2e_scenarios` array, the TDD cycle 
 
 This is the per-task E2E gate. The orchestrator trusts your green run for the per-task verdict and re-verifies the union of scenarios at phase wrap-up — so a green run here is the contract you ship.
 
+**See:** skills/orchestrate/tdd.md
+
 ## Deviation Rules
 
 Handle deviations from the plan using these rules:
@@ -49,7 +51,7 @@ Handle deviations from the plan using these rules:
 | 2: Auto-add critical | Missing validation, auth, error handling | Add it, document in completion notes |
 | 3: Auto-fix blocker | Missing dep, broken import, wrong types | Fix it, document in completion notes |
 | 4: STOP | Architectural change (new table, library swap, breaking API) | Report to lead: what change, which task, why plan doesn't cover it. In agent-teams mode, send via mailbox. In subagents mode, include in your final response. |
-| 5: Spec ownership | You are tempted to modify a spec file other than the one listed at the deterministic path for your `e2e_scenarios` | **Rule 5 — Spec ownership.** You may create exactly one spec file: the deterministic path listed in your task's `e2e_scenarios` brief. You may not modify any other task's spec file. If your work appears to require touching another task's spec, that is a Rule 4 escalation — the design or plan needs to be revised so the new behaviour is owned by a new or existing scenario in the appropriate task. Never patch another task's spec to force green. |
+| 5: Spec ownership | Your work appears to require modifying a spec file outside your task's deterministic path. | **Rule 5 — Spec ownership.** You may create exactly one spec file: the deterministic path listed in your task's `e2e_scenarios` brief. You may not modify any other task's spec file. If your work appears to require touching another task's spec, that is a Rule 4 escalation — the design or plan needs to be revised so the new behaviour is owned by a new or existing scenario in the appropriate task. Never patch another task's spec to force green. |
 
 Only fix issues caused by the current task. Pre-existing issues go to deferred list in completion notes. After 3 failed fix attempts on the same issue, document and move on.
 
