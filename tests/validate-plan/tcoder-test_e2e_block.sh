@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Schema-2 e2e block shape tests. Exercises the rules that govern the
+# top-level `e2e` object (command, runner, spec_dir, scenarios) — not the
+# per-task e2e_scenarios behaviour, which lives in tcoder-test_e2e_scenarios.sh.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -37,158 +40,60 @@ assert_fail() {
   fi
 }
 
-# Build an e2e-enabled plan as a jq transform on top of valid-plan fixture.
-# - Adds e2e block
-# - Marks phase-A task A1 as kind=e2e-red with spec file in files.create
-# - Makes phase-B task B1 the e2e-green task with empty create/modify
-seed_e2e_plan() {
+# Seed a working schema-2 e2e plan into $1 by copying baseline-good. The
+# fixture defines two tasks (A1, A2), one scenario each, runner=playwright,
+# spec_dir=e2e/, and a matching design-baseline.md for the label check.
+seed_baseline() {
   local dir="$1"
   rm -rf "${dir:?}/"*
-  cp -r "$FIXTURES/valid-plan/"* "$dir/"
-  jq '
-    .e2e = {
-      "command": "npx playwright test",
-      "spec_files": ["tests/e2e/flow.spec.ts"],
-      "scenarios": [{"name": "user can log in", "wireframe": "wireframes/01-login.html"}]
-    }
-    | .phases[0].tasks[0].kind = "e2e-red"
-    | .phases[0].tasks[0].files.create = ["tests/e2e/flow.spec.ts"]
-    | .phases[1].tasks[-1].kind = "e2e-green"
-    | .phases[1].tasks[-1].files.create = []
-    | .phases[1].tasks[-1].files.modify = []
-  ' "$FIXTURES/valid-plan/plan.json" > "$dir/plan.json"
+  cp -r "$FIXTURES/baseline-good/"* "$dir/"
 }
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-echo "=== e2e block schema tests ==="
+echo "=== e2e block schema tests (schema 2) ==="
 
-echo "Test 1: Valid e2e plan passes"
-seed_e2e_plan "$TMPDIR"
+echo "Test 1: Happy path — full e2e block with playwright runner"
+seed_baseline "$TMPDIR"
 assert_pass "valid e2e plan passes" \
   "$VALIDATE" --schema "$TMPDIR/plan.json"
 
-echo "Test 2: Missing e2e.command"
-seed_e2e_plan "$TMPDIR"
+echo "Test 2: Empty e2e.command"
+seed_baseline "$TMPDIR"
 jq '.e2e.command = ""' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
 assert_fail "empty e2e.command fails" "empty_e2e_command" \
   "$VALIDATE" --schema "$TMPDIR/plan.json"
 
-echo "Test 3: Empty e2e.spec_files"
-seed_e2e_plan "$TMPDIR"
-jq '.e2e.spec_files = []' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "empty e2e.spec_files fails" "empty_e2e_spec_files" \
+echo "Test 3: Invalid e2e.runner (webdriver)"
+seed_baseline "$TMPDIR"
+jq '.e2e.runner = "webdriver"' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
+assert_fail "unknown runner fails" "invalid_e2e_runner" \
   "$VALIDATE" --schema "$TMPDIR/plan.json"
 
-echo "Test 4: Empty e2e.scenarios"
-seed_e2e_plan "$TMPDIR"
+echo "Test 4: Missing e2e.runner"
+seed_baseline "$TMPDIR"
+jq 'del(.e2e.runner)' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
+assert_fail "missing runner fails" "invalid_e2e_runner" \
+  "$VALIDATE" --schema "$TMPDIR/plan.json"
+
+echo "Test 5: Missing e2e.spec_dir defaults to e2e/"
+seed_baseline "$TMPDIR"
+jq 'del(.e2e.spec_dir)' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
+# Baseline already places spec files under e2e/, so the default should pass.
+assert_pass "missing spec_dir defaults to e2e/" \
+  "$VALIDATE" --schema "$TMPDIR/plan.json"
+
+echo "Test 6: Empty e2e.scenarios"
+seed_baseline "$TMPDIR"
 jq '.e2e.scenarios = []' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
 assert_fail "empty e2e.scenarios fails" "empty_e2e_scenarios" \
   "$VALIDATE" --schema "$TMPDIR/plan.json"
 
-echo "Test 5: Missing e2e-red task kind"
-seed_e2e_plan "$TMPDIR"
-jq 'del(.phases[0].tasks[0].kind)' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "missing e2e-red task fails" "missing_e2e_red_task" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 6: Missing e2e-green task kind"
-seed_e2e_plan "$TMPDIR"
-jq 'del(.phases[1].tasks[-1].kind)' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "missing e2e-green task fails" "missing_e2e_green_task" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 7: e2e-red not first task of first phase"
-seed_e2e_plan "$TMPDIR"
-jq '
-  .phases[0].tasks[0].kind = null
-  | del(.phases[0].tasks[0].kind)
-  | .phases[0].tasks[1].kind = "e2e-red"
-  | .phases[0].tasks[1].files.create += ["tests/e2e/flow.spec.ts"]
-  | .phases[0].tasks[0].files.create -= ["tests/e2e/flow.spec.ts"]
-' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "e2e-red misplaced fails" "e2e_red_position" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 8: e2e-green not last task of last phase"
-seed_e2e_plan "$TMPDIR"
-# Add a task AFTER the e2e-green task so green is not last
-jq '
-  .phases[1].tasks += [{
-    "id": "B2",
-    "name": "Extra after green",
-    "status": "pending",
-    "depends_on": [],
-    "files": {"create": ["src/extra.ts"], "modify": [], "test": ["tests/extra.test.ts"]},
-    "verification": "echo ok",
-    "done_when": "done"
-  }]
-' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-# Create the b2 task stub so orphan checks pass
-printf '# B2: Extra after green\n\n## Steps\nnone\n' > "$TMPDIR/phase-b/b2.md"
-assert_fail "e2e-green misplaced fails" "e2e_green_position" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 9: e2e-green task has non-empty files.create"
-seed_e2e_plan "$TMPDIR"
-jq '.phases[1].tasks[-1].files.create = ["src/extra.ts"]' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "e2e-green with create fails" "e2e_green_files_not_empty" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 10: e2e-green task has non-empty files.modify"
-seed_e2e_plan "$TMPDIR"
-jq '.phases[1].tasks[-1].files.modify = ["src/extra.ts"]' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "e2e-green with modify fails" "e2e_green_files_not_empty" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 11: e2e spec file not in e2e-red.files.create"
-seed_e2e_plan "$TMPDIR"
-jq '.phases[0].tasks[0].files.create = []' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "spec file missing from e2e-red creates fails" "e2e_spec_not_created" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 12: Another task modifies the e2e spec file"
-seed_e2e_plan "$TMPDIR"
-jq '.phases[1].tasks[0].files.modify = ["tests/e2e/flow.spec.ts"]' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "non-red task touching spec file fails" "e2e_spec_contamination" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 13: Duplicate e2e-red tasks"
-seed_e2e_plan "$TMPDIR"
-jq '.phases[0].tasks[1].kind = "e2e-red"' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "duplicate e2e-red fails" "duplicate_e2e_red_task" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 14: Duplicate e2e-green tasks"
-seed_e2e_plan "$TMPDIR"
-jq '
-  .phases[1].tasks += [{
-    "id": "B2",
-    "name": "Second green",
-    "status": "pending",
-    "depends_on": [],
-    "kind": "e2e-green",
-    "files": {"create": [], "modify": [], "test": []},
-    "verification": "echo ok",
-    "done_when": "done"
-  }]
-' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-printf '# B2: Second green\n\n## Steps\nnone\n' > "$TMPDIR/phase-b/b2.md"
-assert_fail "duplicate e2e-green fails" "duplicate_e2e_green_task" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 15: No e2e block, no kind fields — existing valid plan still passes"
-rm -rf "${TMPDIR:?}/"*
-cp -r "$FIXTURES/valid-plan/"* "$TMPDIR/"
-cp "$FIXTURES/valid-plan/plan.json" "$TMPDIR/plan.json"
-assert_pass "plan without e2e block passes (backward compat)" \
-  "$VALIDATE" --schema "$TMPDIR/plan.json"
-
-echo "Test 16: kind field is invalid value"
-seed_e2e_plan "$TMPDIR"
-jq '.phases[0].tasks[0].kind = "bogus"' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
-assert_fail "invalid task kind fails" "invalid_task_kind" \
+echo "Test 7: Scenario missing id field"
+seed_baseline "$TMPDIR"
+jq '.e2e.scenarios[0] = {"name": "no id here"}' "$TMPDIR/plan.json" > "$TMPDIR/p.json" && mv "$TMPDIR/p.json" "$TMPDIR/plan.json"
+assert_fail "scenario without id fails" "missing_scenario_id" \
   "$VALIDATE" --schema "$TMPDIR/plan.json"
 
 echo ""
