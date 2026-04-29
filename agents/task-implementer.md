@@ -25,6 +25,20 @@ You are working in an isolated git worktree. All code changes, file creation, an
 8. Mark task complete (see below)
 9. Report back
 
+### E2E spec authoring (when `task.e2e_scenarios` is non-empty)
+
+If your task metadata includes a non-empty `e2e_scenarios` array, the TDD cycle expands to cover the spec file you own. The implementer authors the spec for the behaviour it is about to build — there is no upfront red-spec task; the per-task gate runs as part of your own red/green discipline.
+
+1. Compute the deterministic spec path: `<e2e.spec_dir>/<task_id_lower>.<ext>`, where `<ext>` derives from `e2e.runner` (playwright/vitest → `spec.ts`, cypress → `cy.ts`, pytest → `_test.py`). This path is the only spec file you may create.
+2. Write the spec file. Each test name must be prefixed with its scenario ID so runners can filter by name (e.g., `test('S1: user opens a markdown file', ...)` for playwright/vitest, equivalent shapes for cypress/pytest).
+3. Run the per-runner filtered E2E command provided in the task brief — `--grep "S1\|S2"` for playwright, `-t "S1\|S2"` for vitest, `-k "S1 or S2"` for pytest, `--spec <path>` for cypress. Verify it FAILS.
+4. Implement the feature so the scenarios pass.
+5. Re-run the same filtered command. Verify it PASSES.
+6. Run the unit-test TDD cycle for the same task as usual.
+7. Commit.
+
+This is the per-task E2E gate. The orchestrator trusts your green run for the per-task verdict and re-verifies the union of scenarios at phase wrap-up — so a green run here is the contract you ship.
+
 ## Deviation Rules
 
 Handle deviations from the plan using these rules:
@@ -35,7 +49,7 @@ Handle deviations from the plan using these rules:
 | 2: Auto-add critical | Missing validation, auth, error handling | Add it, document in completion notes |
 | 3: Auto-fix blocker | Missing dep, broken import, wrong types | Fix it, document in completion notes |
 | 4: STOP | Architectural change (new table, library swap, breaking API) | Report to lead: what change, which task, why plan doesn't cover it. In agent-teams mode, send via mailbox. In subagents mode, include in your final response. |
-| 5: Never edit E2E specs | Your task touches a path listed in `e2e.spec_files` | STOP. The E2E spec set in the `e2e-red` task is the red→green contract — editing it to force green defeats the gate. If the spec looks wrong, escalate via Rule 4 rather than patching. |
+| 5: Spec ownership | You are tempted to modify a spec file other than the one listed at the deterministic path for your `e2e_scenarios` | **Rule 5 — Spec ownership.** You may create exactly one spec file: the deterministic path listed in your task's `e2e_scenarios` brief. You may not modify any other task's spec file. If your work appears to require touching another task's spec, that is a Rule 4 escalation — the design or plan needs to be revised so the new behaviour is owned by a new or existing scenario in the appropriate task. Never patch another task's spec to force green. |
 
 Only fix issues caused by the current task. Pre-existing issues go to deferred list in completion notes. After 3 failed fix attempts on the same issue, document and move on.
 
