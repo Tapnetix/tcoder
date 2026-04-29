@@ -14,6 +14,9 @@ Use this template when dispatching a task-implementer agent. The agent's static 
 - `{COVERAGE_MODE}` — `off`, `advisory`, or `enforce` (from tcoder-settings). Omit the Coverage section below when `off` or when plan.json has no `coverage` object.
 - `{COVERAGE_CMD}` — shell command to run coverage (from plan.json `coverage.command`)
 - `{COVERAGE_THRESHOLD}` — minimum coverage percentage (from tcoder-settings)
+- `{E2E_SPEC_PATH}` — deterministic spec path `<e2e.spec_dir>/<task_id_lower><ext>`, derived by the orchestrator from plan.json. Include the E2E section below only when `task.e2e_scenarios` is non-empty.
+- `{E2E_RUNNER}` — value of `plan.e2e.runner` (`playwright`, `vitest`, `pytest`, or `cypress`)
+- `{E2E_FILTERED_CMD}` — the per-runner filtered command for this task's scenarios; the orchestrator builds it from `plan.e2e.command` plus the filter form for `{E2E_RUNNER}` (see the runner/filter table in `skills/orchestrate/SKILL.md`)
 
 ```text
 Agent(
@@ -42,6 +45,29 @@ Agent(
     Mode: {COVERAGE_MODE} | Threshold: {COVERAGE_THRESHOLD}%
     - advisory: report coverage in your completion notes, aim for threshold but don't block
     - enforce: coverage for touched files must meet threshold; if below, add tests before moving on
+
+    ## E2E Spec  <!-- include this section only when task.e2e_scenarios in {TASK_METADATA} is non-empty -->
+
+    This task owns the E2E scenarios listed in `e2e_scenarios`. Author the spec as part of your TDD cycle — the spec is task-scoped, not plan-scoped.
+
+    Spec path (deterministic): {E2E_SPEC_PATH}
+    Runner: {E2E_RUNNER}
+    Filtered command: {E2E_FILTERED_CMD}
+
+    Each scenario in `e2e_scenarios` becomes exactly one test whose name STARTS WITH `S<n>:` (the colon is required and the prefix is case-sensitive). The scenario name from the plan goes after the colon. Examples:
+    - playwright/vitest: `test('S1: user signs in', () => { ... })`
+    - pytest: `def test_S1_user_signs_in():` (the `S1:` prefix is matched by `-k "S1 or S2"`; underscore-separated name body is fine)
+
+    Name-based filters (`--grep`, `-t`, `-k`) match these prefixes. Cypress filters by `--spec` instead, which works because the spec path is unique per task.
+
+    Cycle (same red/green/refactor as unit tests, with one extra red/green for the spec):
+    1. Write the spec file at {E2E_SPEC_PATH} with one `S<n>:`-prefixed test per scenario.
+    2. Run {E2E_FILTERED_CMD} — verify every assertion FAILS (RED). No implementation exists yet.
+    3. Implement the feature.
+    4. Re-run {E2E_FILTERED_CMD} — verify every assertion PASSES (GREEN).
+    5. Commit. The green run must be visible in commit history; the reviewer checks for it.
+
+    Deviation Rule 5 (in your agent definition) restricts you to this single spec file — modifying any other task's spec file requires a Rule 4 escalation. The full rule text lives in `agents/task-implementer.md`.
 
     ## Before You Begin
 
