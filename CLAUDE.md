@@ -60,6 +60,8 @@ This repo uses its own skills. The typical flow: design -> worktree -> draft-pla
 
 Orchestrate supports two execution modes: subagents (parallel Agent tool dispatches) and agent teams (parallel teammates). The design skill recommends a mode based on plan complexity. Agent teams requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`.
 
+E2E specs are owned per task (schema 2): a task with `e2e_scenarios` writes its own spec at `<e2e.spec_dir>/<task_id_lower><ext>`, runs the per-runner filtered command as part of TDD, and the orchestrator re-runs the union at every phase end. Plans on the old schema (a single shared `e2e-red`/`e2e-green` pair) need to migrate — see validate-plan / validate-design for schema 2 enforcement.
+
 ## Markdown
 
 - Always add a language label to fenced code blocks (MD040) — CodeRabbit flags this on every PR
