@@ -80,7 +80,7 @@ Note: `workflow` and `execution_mode` are read from plan.json (set by the design
 - Read implementation reviewer model: `IMPL_REVIEWER_MODEL=$(tcoder-settings get implementation_reviewer_model)`
 Note: These model settings are substituted into dispatch template variables `{TASK_IMPLEMENTER_MODEL}`, `{TASK_REVIEWER_MODEL}`, and `{IMPL_REVIEWER_MODEL}` when dispatching implementers, reviewers, and fix-cycle agents.
 - Read coverage config: `COVERAGE_MODE=$(tcoder-settings get coverage_mode)` and `COVERAGE_THRESHOLD=$(tcoder-settings get coverage_threshold)`. Also read from plan.json: `COVERAGE_CMD=$(jq -r '.coverage.command // empty' "$PLAN_JSON")`. If `COVERAGE_MODE` is not `off` and `COVERAGE_CMD` is non-empty, pass `{COVERAGE_MODE}`, `{COVERAGE_THRESHOLD}`, and `{COVERAGE_CMD}` to implementer and reviewer prompts.
-- Read E2E config: `E2E_MODE=$(tcoder-settings get e2e_mode)` and `E2E_CMD=$(jq -r '.e2e.command // empty' "$PLAN_JSON")`. When both are set, E2E gates are active — the `e2e-red` task must leave the suite RED before impl begins, and the `e2e-green` task must leave it GREEN after all impl completes.
+- Read E2E config: `E2E_MODE=$(tcoder-settings get e2e_mode)`, `E2E_CMD=$(jq -r '.e2e.command // empty' "$PLAN_JSON")`, `E2E_RUNNER=$(jq -r '.e2e.runner // empty' "$PLAN_JSON")`. When `E2E_MODE=off`, all E2E branches skip (no per-task gate, no phase-end gate, no e2e-gate records). Otherwise gates run at task scope (implementer-owned) and phase scope (orchestrator-owned) — see **E2E Gates** below.
 - Count phases: `PHASE_COUNT=$(jq '.phases | length' "$PLAN_JSON")`
 - Validate schema: `validate-plan --schema "$PLAN_JSON"`
 - Validate entry gate: `validate-plan --check-entry "$PLAN_JSON" --stage execution`
@@ -116,26 +116,56 @@ Follow the dispatch protocol from the mode-specific file read during setup. Both
 
 The dispatch file specifies how tasks are dispatched (teammates vs subagents), how completions are detected (push vs background notification), and how review fixes are communicated (mailbox vs fresh agent).
 
-### E2E Gate (when E2E_MODE != off and E2E_CMD is set)
+### E2E Gates (when E2E_MODE != off and the plan has an E2E block)
 
-Run these gates around the `e2e-red` and `e2e-green` tasks. The goal: prove the E2E suite is RED before implementation begins, and GREEN only after complete implementation — without the E2E spec files ever being edited between those two points.
+Each task delivering UX owns one spec file at `<e2e.spec_dir>/<task_id_lower>.<ext>` listing its scenario IDs in `e2e_scenarios`. Test names are prefixed `S<n>:` so name-based runners filter by ID.
 
-1. **After `e2e-red` task completes (first task of first phase):** Run `$E2E_CMD` in the worktree. It MUST exit non-zero. Record `E2E_RED_SHA=$(git rev-parse HEAD)` and store it in `${PLAN_DIR}/reviews.json` as `{"type":"e2e-gate","scope":"red","sha":"...","failure_count":N,"verdict":"pass","timestamp":"..."}`. If the suite passes prematurely, the spec is testing a mock or an already-implemented feature — fail hard and AskUserQuestion to investigate.
-2. **Between tasks (advisory):** No gate. Implementation tasks may change the unit-test suite freely but MUST NOT edit any path in `e2e.spec_files` (enforced by task-implementer deviation rule 5 and reviewed by task-reviewer + implementation-reviewer).
-3. **After `e2e-green` task completes (last task of last phase):** Verify `git diff $E2E_RED_SHA..HEAD -- $(jq -r '.e2e.spec_files | join(" ")' "$PLAN_JSON")` is empty — no spec drift. Run `$E2E_CMD`. It MUST exit zero and every scenario must appear as passed. Record `{"type":"e2e-gate","scope":"green","verdict":"pass",...}` in reviews.json.
+**Per-runner filter map:**
 
-When `E2E_MODE=advisory`, violations are reported in completion notes but don't block advancement. When `E2E_MODE=enforce`, any violation fails the phase and must be fixed before `validate-plan --check-review` can pass.
+| Runner | Filter form |
+|---|---|
+| playwright | `--grep "S1\|S2"` |
+| vitest | `-t "S1\|S2"` |
+| pytest | `-k "S1 or S2"` |
+| cypress | `--spec <path>` (file-based — each task owns one file at the deterministic path) |
+
+**Per-task gate (implementer-owned):** the implementer runs the filtered command for its `e2e_scenarios` as part of TDD red/green within its session and commits only when green. The orchestrator does not re-run per task; the phase-end aggregate covers it.
+
+**Phase-end gate (orchestrator-owned):** after the per-phase impl-review passes (Phase Wrap-Up step 1), run the same filter form OR-ed across every scenario introduced through this phase plus all earlier phases. The final phase's wrap-up therefore covers the full plan — no separate plan-end gate.
+
+**E2E-gate review record** (appended to `${PLAN_DIR}/reviews.json`):
+
+```json
+{
+  "type": "e2e-gate",
+  "scope": "task" | "phase",
+  "task_id": "A2",
+  "phase": "A",
+  "scenarios": ["S1", "S2"],
+  "command": "npx playwright test --grep \"S1|S2\"",
+  "verdict": "pass" | "fail",
+  "timestamp": "2026-04-29T12:34:56Z"
+}
+```
+
+`scope: "task"` records carry `task_id` (written by the implementer); `scope: "phase"` records carry `phase` and the union of in-scope scenarios (written by the orchestrator).
+
+**Mode behavior:**
+- `off` — no records, no gates run; skip every E2E branch.
+- `advisory` — both gates run and write records identically to `enforce`; a `fail` surfaces as a non-blocking warning in completion notes and the orchestrator advances.
+- `enforce` — a `fail` halts the phase. Dispatch an implementer to fix, re-run the gate, advance only after the record flips to `pass`.
 
 ### Phase Wrap-Up
 
 After all tasks complete and branches merged:
 1. TaskUpdate the phase's review tracking item to `in_progress`. Dispatch implementation-review with `PHASE_BASE_SHA..HEAD` using `model: "$IMPL_REVIEWER_MODEL"`, run Review Loop Protocol (scope: `phase-{letter_lower}`). On verdict pass, TaskUpdate the review tracking item to `completed`.
 2. `validate-plan --check-review "$PLAN_JSON" --type impl-review --scope phase-{letter_lower}`
-3. Append review changes to `${PHASE_DIR}/completion.md`
-4. **Coverage gate** (when `COVERAGE_MODE` is `enforce` and `COVERAGE_CMD` is set): TaskUpdate the coverage tracking item to `in_progress`. Run the coverage command and verify the result meets `COVERAGE_THRESHOLD`. If coverage has regressed below the threshold, dispatch an implementer to add missing tests before proceeding. Log coverage percentage in `${PHASE_DIR}/completion.md`. TaskUpdate to `completed` once threshold is met.
-5. Run phase criteria: `validate-plan --criteria "$PLAN_JSON" --phase {LETTER}`
-6. Update status: `validate-plan --update-status "$PLAN_JSON" --phase {LETTER} --status "Complete (YYYY-MM-DD)"`
-7. (Multi-phase) Create phase PR, external review gate, merge, clean up worktree
+3. **Phase-end E2E gate** (when `E2E_MODE != off` and the plan has an E2E block): build the filter from every scenario introduced through this phase plus all earlier phases using the per-runner map above, run the resulting command, and append a `scope: "phase"` e2e-gate record to `${PLAN_DIR}/reviews.json`. Under `enforce`, a `fail` halts the phase until fixed; under `advisory`, log a non-blocking warning in `${PHASE_DIR}/completion.md` and advance.
+4. Append review changes to `${PHASE_DIR}/completion.md`
+5. **Coverage gate** (when `COVERAGE_MODE` is `enforce` and `COVERAGE_CMD` is set): TaskUpdate the coverage tracking item to `in_progress`. Run the coverage command and verify the result meets `COVERAGE_THRESHOLD`. If coverage has regressed below the threshold, dispatch an implementer to add missing tests before proceeding. Log coverage percentage in `${PHASE_DIR}/completion.md`. TaskUpdate to `completed` once threshold is met.
+6. Run phase criteria: `validate-plan --criteria "$PLAN_JSON" --phase {LETTER}`
+7. Update status: `validate-plan --update-status "$PLAN_JSON" --phase {LETTER} --status "Complete (YYYY-MM-DD)"`
+8. (Multi-phase) Create phase PR, external review gate, merge, clean up worktree
 
 ## Review Loop Protocol
 
